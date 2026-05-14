@@ -3,9 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function TotpVerifyPage() {
   const router = useRouter();
+  const { setAuth } = useAuth();
   const [preAuthToken, setPreAuthToken] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
@@ -26,8 +28,7 @@ export default function TotpVerifyPage() {
       sessionStorage.removeItem('preAuthToken');
 
       if ('accessToken' in data) {
-        localStorage.setItem('access_token', data.accessToken);
-        localStorage.setItem('user', JSON.stringify(data.user));
+        setAuth(data.accessToken, data.user);
         router.push('/dashboard');
       }
     } catch (err: unknown) {

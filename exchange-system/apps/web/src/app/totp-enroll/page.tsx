@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import api from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function TotpEnrollPage() {
   const router = useRouter();
+  const { setAuth } = useAuth();
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [secret, setSecret] = useState('');
   const [enrollToken, setEnrollToken] = useState('');
@@ -40,8 +42,7 @@ export default function TotpEnrollPage() {
 
       // Response is AuthResponse — store token + user
       if ('accessToken' in data) {
-        localStorage.setItem('access_token', data.accessToken);
-        localStorage.setItem('user', JSON.stringify(data.user));
+        setAuth(data.accessToken, data.user);
         router.push('/dashboard');
       }
     } catch (err: unknown) {

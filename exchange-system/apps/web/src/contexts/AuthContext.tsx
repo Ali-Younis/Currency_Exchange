@@ -9,6 +9,7 @@ interface AuthContextValue {
   user: UserSummary | null;
   isLoading: boolean;
   login: (username: string, password: string) => Promise<LoginResult>;
+  setAuth: (token: string, user: UserSummary) => void;
   logout: () => Promise<void>;
 }
 
@@ -34,6 +35,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return data;
   }, []);
 
+  const setAuth = useCallback((token: string, authUser: UserSummary) => {
+    setStoredAuth(token, authUser);
+    setUser(authUser);
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await api.post('/auth/logout');
@@ -45,7 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, setAuth, logout }}>
       {children}
     </AuthContext.Provider>
   );
