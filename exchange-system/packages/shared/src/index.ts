@@ -175,6 +175,8 @@ export interface SessionReportRow {
   currencyCode: string;
   currencyNameEn: string;
   currencyNameAr: string;
+  symbol: string;
+  countryCode?: string | null;
   openingBalance: string;
   totalBuys: string;
   totalSells: string;

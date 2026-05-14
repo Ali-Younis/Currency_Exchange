@@ -61,6 +61,7 @@ export class ReportsService {
           currencyNameEn: currency.nameEn,
           currencyNameAr: currency.nameAr,
           symbol: currency.symbol,
+          countryCode: currency.countryCode,
           openingBalance: opening.toFixed(2),
           totalBuys: totalBuys.toFixed(2),
           totalSells: totalSells.toFixed(2),

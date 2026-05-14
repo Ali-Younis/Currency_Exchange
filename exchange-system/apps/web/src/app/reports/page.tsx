@@ -37,6 +37,13 @@ const thirtyDaysAgo = () => {
   return d.toISOString().split('T')[0];
 };
 
+function countryFlag(code: string | null | undefined): string {
+  if (!code || code.length !== 2) return '';
+  return [...code.toUpperCase()].map((c) =>
+    String.fromCodePoint(0x1f1e0 + c.charCodeAt(0) - 65),
+  ).join('');
+}
+
 type Tab = 'session' | 'profit' | 'volume' | 'customers' | 'rates' | 'audit' | 'eod';
 
 // ─── small shared components ──────────────────────────────────────────────────
@@ -195,8 +202,9 @@ function SessionTab() {
                 {report?.rows.map((row) => (
                   <tr key={row.currencyId} className="border-t border-gray-100 hover:bg-gray-50">
                     <td className="px-5 py-3">
+                      <span className="text-xl me-2">{countryFlag(row.countryCode)}</span>
                       <span className="font-bold text-gray-900">{row.currencyCode}</span>
-                      <span className="text-gray-400 text-xs ms-2">{row.currencyNameEn}</span>
+                      <span className="text-gray-400 text-xs ms-2">({row.currencyNameEn})</span>
                     </td>
                     <td className="px-5 py-3 text-right text-gray-600">{row.openingBalance}</td>
                     <td className="px-5 py-3 text-right text-green-600 font-medium">
@@ -904,8 +912,9 @@ function EndOfDayTab() {
                 {data?.balances.map((row) => (
                   <tr key={row.currencyId} className="border-t border-gray-100 hover:bg-gray-50">
                     <td className="px-5 py-3">
+                      <span className="text-xl me-2">{countryFlag(row.countryCode)}</span>
                       <span className="font-bold text-gray-900">{row.currencyCode}</span>
-                      <span className="text-gray-400 text-xs ms-2">{row.currencyNameEn}</span>
+                      <span className="text-gray-400 text-xs ms-2">({row.currencyNameEn})</span>
                     </td>
                     <td className="px-5 py-3 text-right text-gray-600">{row.openingBalance}</td>
                     <td className="px-5 py-3 text-right text-green-600 font-medium">

@@ -49,7 +49,7 @@ export function Sidebar() {
   useEffect(() => {
     if (!user) return;
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/app-settings/logo_base64`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
+      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (d?.value) setLogoB64(d.value); })

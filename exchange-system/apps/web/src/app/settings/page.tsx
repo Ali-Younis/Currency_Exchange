@@ -20,7 +20,7 @@ function getCookie(name: string): string | undefined {
 const API = process.env.NEXT_PUBLIC_API_URL;
 
 function authHeaders() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
   return { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
 }
 

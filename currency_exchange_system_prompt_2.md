@@ -17,3 +17,7 @@
 14- Create a SW QA agent that can run untensive testing on the system, so it discovers and report any issues. In case of issues, make sure to fix them.
 15- Prompt the admin and teller type of users to change their passwords on the first login.
 16- Craft a very restrictive password policy, length and combination wise.
+----------
+17- Add a possibility to forgot and reset password by email sent to the user
+18- All users including the admin should be forced to change their password at the first login
+19- Populate the system with reasonable data so I can test the different functionalities like selling, buying, current balance, opening balance, etc...

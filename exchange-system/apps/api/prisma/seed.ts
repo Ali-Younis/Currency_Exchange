@@ -29,7 +29,7 @@ async function main() {
   for (const c of DEFAULT_CURRENCIES) {
     await prisma.currency.upsert({
       where: { code: c.code },
-      update: {},
+      update: { countryCode: c.countryCode },
       create: { ...c, isActive: true },
     });
   }

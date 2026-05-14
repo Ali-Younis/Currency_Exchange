@@ -26,11 +26,11 @@ function countryFlag(code: string | null | undefined): string {
   ).join('');
 }
 
-function BalanceCell({ value, symbol }: { value: string; symbol: string }) {
+function BalanceCell({ value }: { value: string }) {
   const num = parseFloat(value);
   return (
     <span className={num < 0 ? 'text-red-600' : 'text-gray-800'}>
-      {symbol} {formatNumber(num)}
+      {formatNumber(num)}
     </span>
   );
 }
@@ -82,19 +82,19 @@ export default function CurrentBalancesPage() {
                   <td className="px-5 py-3 text-2xl">{countryFlag(row.countryCode)}</td>
                   <td className="px-5 py-3">
                     <span className="font-semibold text-gray-900">{row.currencyCode}</span>
-                    <span className="text-gray-400 ml-2 text-xs">{row.currencyNameEn}</span>
+                    <span className="text-gray-400 ml-2 text-xs">({row.currencyNameEn})</span>
                   </td>
                   <td className="px-5 py-3 text-right">
-                    <BalanceCell value={row.openingBalance} symbol={row.symbol} />
+                    <BalanceCell value={row.openingBalance} />
                   </td>
                   <td className="px-5 py-3 text-right text-green-700">
-                    + {row.symbol} {formatNumber(parseFloat(row.totalBuys))}
+                    + {formatNumber(parseFloat(row.totalBuys))}
                   </td>
                   <td className="px-5 py-3 text-right text-red-600">
-                    − {row.symbol} {formatNumber(parseFloat(row.totalSells))}
+                    − {formatNumber(parseFloat(row.totalSells))}
                   </td>
                   <td className="px-5 py-3 text-right font-bold">
-                    <BalanceCell value={row.currentBalance} symbol={row.symbol} />
+                    <BalanceCell value={row.currentBalance} />
                   </td>
                 </tr>
               ))}
