@@ -21,9 +21,34 @@ export interface AuthTokenPayload {
   exp?: number;
 }
 
+/** Returned when the user needs to enrol in TOTP before getting a full token */
+export interface TotpEnrollRequired {
+  requiresEnrollment: true;
+  enrollToken: string;   // short-lived JWT (5 min), used only for /auth/totp/setup & /auth/totp/enroll
+}
+
+/** Returned when the user is enrolled but must verify their TOTP code */
+export interface TotpVerifyRequired {
+  requiresTotp: true;
+  preAuthToken: string;  // short-lived JWT (5 min), used only for /auth/totp/verify
+}
+
+/** Returned when the user must change their password before continuing */
+export interface PasswordChangeRequired {
+  requiresPasswordChange: true;
+  preAuthToken: string;  // short-lived JWT (5 min), used only for /auth/change-password
+}
+
+export type LoginResult = AuthResponse | TotpEnrollRequired | TotpVerifyRequired | PasswordChangeRequired;
+
 export interface AuthResponse {
   accessToken: string;
   user: UserSummary;
+}
+
+export interface ChangePasswordDto {
+  preAuthToken: string;
+  newPassword: string;
 }
 
 // ─── Users ───────────────────────────────────
@@ -34,6 +59,9 @@ export interface UserSummary {
   fullName: string;
   role: Role;
   isActive: boolean;
+  permissions?: string[];
+  totpEnabled?: boolean;
+  forcePasswordChange?: boolean;
 }
 
 export interface CreateUserDto {
@@ -51,6 +79,7 @@ export interface CurrencyDto {
   nameEn: string;
   nameAr: string;
   symbol: string;
+  countryCode?: string | null;
   isActive: boolean;
   sortOrder: number;
 }
@@ -60,6 +89,7 @@ export interface CreateCurrencyDto {
   nameEn: string;
   nameAr: string;
   symbol: string;
+  countryCode?: string;
   sortOrder?: number;
 }
 
@@ -104,6 +134,7 @@ export interface TransactionDto {
   receiptNumber: string;
   type: TransactionType;
   customerName: string;
+  customerEmail?: string | null;
   currencyInId: string;
   currencyInCode: string;
   amountIn: string;
@@ -123,6 +154,7 @@ export interface TransactionDto {
 export interface CreateTransactionDto {
   type: TransactionType;
   customerName: string;
+  customerEmail?: string;
   currencyInId: string;
   amountIn: string;
   currencyOutId: string;
@@ -261,4 +293,30 @@ export interface TransactionFilterQuery extends PaginationQuery {
   sessionDate?: string;
   type?: TransactionType;
   tellerId?: string;
+}
+
+// ─── App Settings ────────────────────────────
+
+export interface AppSettingDto {
+  key: string;
+  value: string;
+}
+
+export interface SetAppSettingDto {
+  value: string;
+}
+
+// ─── Current Balances ────────────────────────
+
+export interface CurrentBalanceRow {
+  currencyId: string;
+  currencyCode: string;
+  currencyNameEn: string;
+  currencyNameAr: string;
+  symbol: string;
+  countryCode?: string | null;
+  openingBalance: string;
+  totalBuys: string;
+  totalSells: string;
+  currentBalance: string;
 }

@@ -1,5 +1,5 @@
 import {
-  IsIn, IsUUID, IsDateString, IsNumberString, IsNotEmpty, IsOptional, IsString, MaxLength,
+  IsIn, IsUUID, IsDateString, IsNumberString, IsNotEmpty, IsOptional, IsString, MaxLength, IsEmail,
 } from 'class-validator';
 import { TransactionType } from '@exchange/shared';
 
@@ -11,6 +11,11 @@ export class CreateTransactionDto {
   @IsNotEmpty()
   @MaxLength(200)
   customerName!: string;
+
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(255)
+  customerEmail?: string;
 
   @IsUUID()
   currencyInId!: string;

@@ -8,18 +8,18 @@ const adapter = new PrismaPg({
 const prisma = new PrismaClient({ adapter });
 
 const DEFAULT_CURRENCIES = [
-  { code: 'GBP', nameEn: 'British Pound',        nameAr: 'الجنيه الإسترليني', symbol: '£',  sortOrder: 1 },
-  { code: 'USD', nameEn: 'US Dollar',             nameAr: 'الدولار الأمريكي',  symbol: '$',  sortOrder: 2 },
-  { code: 'EUR', nameEn: 'Euro',                  nameAr: 'اليورو',            symbol: '€',  sortOrder: 3 },
-  { code: 'JOD', nameEn: 'Jordanian Dinar',       nameAr: 'الدينار الأردني',   symbol: 'JD', sortOrder: 4 },
-  { code: 'SAR', nameEn: 'Saudi Riyal',           nameAr: 'الريال السعودي',    symbol: '﷼',  sortOrder: 5 },
-  { code: 'AED', nameEn: 'UAE Dirham',            nameAr: 'الدرهم الإماراتي',  symbol: 'د.إ', sortOrder: 6 },
-  { code: 'CHF', nameEn: 'Swiss Franc',           nameAr: 'الفرنك السويسري',   symbol: 'Fr', sortOrder: 7 },
-  { code: 'EGP', nameEn: 'Egyptian Pound',        nameAr: 'الجنيه المصري',     symbol: 'E£', sortOrder: 8 },
-  { code: 'BHD', nameEn: 'Bahraini Dinar',        nameAr: 'الدينار البحريني',  symbol: '.د.ب', sortOrder: 9 },
-  { code: 'AUD', nameEn: 'Australian Dollar',     nameAr: 'الدولار الأسترالي', symbol: 'A$', sortOrder: 10 },
-  { code: 'CAD', nameEn: 'Canadian Dollar',       nameAr: 'الدولار الكندي',    symbol: 'C$', sortOrder: 11 },
-  { code: 'TRY', nameEn: 'Turkish Lira',          nameAr: 'الليرة التركية',    symbol: '₺',  sortOrder: 12 },
+  { code: 'GBP', nameEn: 'British Pound',        nameAr: 'الجنيه الإسترليني', symbol: '£',   countryCode: 'GB', sortOrder: 1 },
+  { code: 'USD', nameEn: 'US Dollar',             nameAr: 'الدولار الأمريكي',  symbol: '$',   countryCode: 'US', sortOrder: 2 },
+  { code: 'EUR', nameEn: 'Euro',                  nameAr: 'اليورو',            symbol: '€',   countryCode: 'EU', sortOrder: 3 },
+  { code: 'JOD', nameEn: 'Jordanian Dinar',       nameAr: 'الدينار الأردني',   symbol: 'JD',  countryCode: 'JO', sortOrder: 4 },
+  { code: 'SAR', nameEn: 'Saudi Riyal',           nameAr: 'الريال السعودي',    symbol: '﷼',   countryCode: 'SA', sortOrder: 5 },
+  { code: 'AED', nameEn: 'UAE Dirham',            nameAr: 'الدرهم الإماراتي',  symbol: 'د.إ', countryCode: 'AE', sortOrder: 6 },
+  { code: 'CHF', nameEn: 'Swiss Franc',           nameAr: 'الفرنك السويسري',   symbol: 'Fr',  countryCode: 'CH', sortOrder: 7 },
+  { code: 'EGP', nameEn: 'Egyptian Pound',        nameAr: 'الجنيه المصري',     symbol: 'E£',  countryCode: 'EG', sortOrder: 8 },
+  { code: 'BHD', nameEn: 'Bahraini Dinar',        nameAr: 'الدينار البحريني',  symbol: '.د.ب',countryCode: 'BH', sortOrder: 9 },
+  { code: 'AUD', nameEn: 'Australian Dollar',     nameAr: 'الدولار الأسترالي', symbol: 'A$',  countryCode: 'AU', sortOrder: 10 },
+  { code: 'CAD', nameEn: 'Canadian Dollar',       nameAr: 'الدولار الكندي',    symbol: 'C$',  countryCode: 'CA', sortOrder: 11 },
+  { code: 'TRY', nameEn: 'Turkish Lira',          nameAr: 'الليرة التركية',    symbol: '₺',   countryCode: 'TR', sortOrder: 12 },
 ];
 
 async function main() {

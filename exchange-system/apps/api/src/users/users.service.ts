@@ -12,7 +12,10 @@ export class UsersService {
 
   async findAll() {
     return this.prisma.user.findMany({
-      select: { id: true, username: true, fullName: true, role: true, isActive: true, createdAt: true },
+      select: {
+        id: true, username: true, fullName: true, role: true, isActive: true,
+        permissions: true, totpEnabled: true, forcePasswordChange: true, createdAt: true,
+      },
       orderBy: { createdAt: 'asc' },
     });
   }
@@ -20,7 +23,10 @@ export class UsersService {
   async findOne(id: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      select: { id: true, username: true, fullName: true, role: true, isActive: true, createdAt: true },
+      select: {
+        id: true, username: true, fullName: true, role: true, isActive: true,
+        permissions: true, totpEnabled: true, forcePasswordChange: true, createdAt: true,
+      },
     });
     if (!user) throw new NotFoundException(`User ${id} not found`);
     return user;
@@ -32,8 +38,17 @@ export class UsersService {
 
     const passwordHash = await bcrypt.hash(dto.password, SALT_ROUNDS);
     return this.prisma.user.create({
-      data: { username: dto.username, passwordHash, fullName: dto.fullName, role: dto.role },
-      select: { id: true, username: true, fullName: true, role: true, isActive: true, createdAt: true },
+      data: {
+        username: dto.username,
+        passwordHash,
+        fullName: dto.fullName,
+        role: dto.role,
+        forcePasswordChange: true,  // new users must change password on first login
+      },
+      select: {
+        id: true, username: true, fullName: true, role: true, isActive: true,
+        permissions: true, totpEnabled: true, forcePasswordChange: true, createdAt: true,
+      },
     });
   }
 
@@ -47,7 +62,10 @@ export class UsersService {
     return this.prisma.user.update({
       where: { id },
       data,
-      select: { id: true, username: true, fullName: true, role: true, isActive: true, updatedAt: true },
+      select: {
+        id: true, username: true, fullName: true, role: true, isActive: true,
+        permissions: true, totpEnabled: true, forcePasswordChange: true, updatedAt: true,
+      },
     });
   }
 }

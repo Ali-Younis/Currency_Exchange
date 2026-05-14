@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsInt, Min, MaxLength } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsInt, Min, MaxLength, Length } from 'class-validator';
 
 export class CreateCurrencyDto {
   @IsString()
@@ -20,6 +20,11 @@ export class CreateCurrencyDto {
   @IsNotEmpty()
   @MaxLength(10)
   symbol!: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(2, 2)
+  countryCode?: string;
 
   @IsOptional()
   @IsInt()

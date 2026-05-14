@@ -1,14 +1,14 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { UserSummary, AuthResponse } from '@exchange/shared';
+import { UserSummary, AuthResponse, LoginResult } from '@exchange/shared';
 import api from '@/lib/api';
 import { setStoredAuth, clearStoredAuth, getStoredUser } from '@/lib/auth';
 
 interface AuthContextValue {
   user: UserSummary | null;
   isLoading: boolean;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<LoginResult>;
   logout: () => Promise<void>;
 }
 
@@ -23,10 +23,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false);
   }, []);
 
-  const login = useCallback(async (username: string, password: string) => {
-    const { data } = await api.post<AuthResponse>('/auth/login', { username, password });
-    setStoredAuth(data.accessToken, data.user);
-    setUser(data.user);
+  const login = useCallback(async (username: string, password: string): Promise<LoginResult> => {
+    const { data } = await api.post<LoginResult>('/auth/login', { username, password });
+
+    if ('accessToken' in data) {
+      setStoredAuth((data as AuthResponse).accessToken, (data as AuthResponse).user);
+      setUser((data as AuthResponse).user);
+    }
+
+    return data;
   }, []);
 
   const logout = useCallback(async () => {

@@ -7,6 +7,14 @@ import { useState } from 'react';
 import api from '@/lib/api';
 import { CurrencyDto, CreateCurrencyDto } from '@exchange/shared';
 
+function countryFlag(code: string | null | undefined): string {
+  if (!code || code.length !== 2) return '';
+  // Convert 2-letter ISO code to regional indicator emoji (flag)
+  return [...code.toUpperCase()].map((c) =>
+    String.fromCodePoint(0x1f1e0 + c.charCodeAt(0) - 65),
+  ).join('');
+}
+
 function CurrencyModal({
   onClose,
   onSaved,
@@ -19,6 +27,7 @@ function CurrencyModal({
     nameEn: '',
     nameAr: '',
     symbol: '',
+    countryCode: '',
     sortOrder: undefined,
   });
   const [error, setError] = useState('');
@@ -38,7 +47,7 @@ function CurrencyModal({
         <h2 className="text-lg font-semibold text-gray-800 mb-4">Add Currency</h2>
         {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
         <div className="space-y-3">
-          {(['code', 'nameEn', 'nameAr', 'symbol'] as const).map((f) => (
+          {(['code', 'nameEn', 'nameAr', 'symbol', 'countryCode'] as const).map((f) => (
             <div key={f}>
               <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">{f}</label>
               <input
@@ -118,6 +127,7 @@ export default function CurrenciesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 text-gray-500 text-xs uppercase border-b border-gray-200">
+                <th className="text-left px-5 py-3">Flag</th>
                 <th className="text-left px-5 py-3">Code</th>
                 <th className="text-left px-5 py-3">Name (EN)</th>
                 <th className="text-left px-5 py-3">Name (AR)</th>
@@ -130,6 +140,7 @@ export default function CurrenciesPage() {
             <tbody>
               {currencies?.map((c) => (
                 <tr key={c.id} className="border-t border-gray-100 hover:bg-gray-50">
+                  <td className="px-5 py-3 text-2xl">{countryFlag(c.countryCode)}</td>
                   <td className="px-5 py-3 font-bold">{c.code}</td>
                   <td className="px-5 py-3">{c.nameEn}</td>
                   <td className="px-5 py-3 font-arabic">{c.nameAr}</td>

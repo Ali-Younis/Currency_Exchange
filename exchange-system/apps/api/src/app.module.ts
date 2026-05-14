@@ -9,6 +9,7 @@ import { ExchangeRatesModule } from './exchange-rates/exchange-rates.module';
 import { BalancesModule } from './balances/balances.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { ReportsModule } from './reports/reports.module';
+import { AppSettingsModule } from './app-settings/app-settings.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -24,6 +25,7 @@ import { AppService } from './app.service';
     BalancesModule,
     TransactionsModule,
     ReportsModule,
+    AppSettingsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

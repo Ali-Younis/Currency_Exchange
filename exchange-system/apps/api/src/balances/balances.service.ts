@@ -46,4 +46,49 @@ export class BalancesService {
 
     return balance;
   }
+
+  /** Real-time balances: opening + buys - sells for today's session */
+  async getCurrentBalances(sessionDate?: string) {
+    const today = sessionDate ?? new Date().toISOString().split('T')[0];
+    const dateKey = new Date(today);
+
+    const currencies = await this.prisma.currency.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
+    });
+
+    const openingBals = await this.prisma.openingBalance.findMany({
+      where: { sessionDate: dateKey },
+    });
+
+    const openingMap = Object.fromEntries(openingBals.map((b) => [b.currencyId, b.amount]));
+
+    const txns = await this.prisma.transaction.findMany({
+      where: { sessionDate: dateKey, isVoided: false },
+    });
+
+    return currencies.map((c) => {
+      const opening = openingMap[c.id] ?? 0;
+      const buys = txns
+        .filter((t) => t.type === 'BUY' && t.currencyInId === c.id)
+        .reduce((s, t) => s + parseFloat(t.amountIn.toString()), 0);
+      const sells = txns
+        .filter((t) => t.type === 'SELL' && t.currencyOutId === c.id)
+        .reduce((s, t) => s + parseFloat(t.amountOut.toString()), 0);
+      const current = parseFloat(opening.toString()) + buys - sells;
+
+      return {
+        currencyId: c.id,
+        currencyCode: c.code,
+        currencyNameEn: c.nameEn,
+        currencyNameAr: c.nameAr,
+        symbol: c.symbol,
+        countryCode: c.countryCode,
+        openingBalance: parseFloat(opening.toString()).toFixed(2),
+        totalBuys: buys.toFixed(2),
+        totalSells: sells.toFixed(2),
+        currentBalance: current.toFixed(2),
+      };
+    });
+  }
 }

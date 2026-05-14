@@ -28,14 +28,18 @@ enum TransactionType {
 // ─────────────────────────────────────────────
 
 model User {
-  id           String   @id @default(uuid())
-  username     String   @unique
-  passwordHash String
-  fullName     String
-  role         Role     @default(TELLER)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                  String   @id @default(uuid())
+  username            String   @unique
+  passwordHash        String
+  fullName            String
+  role                Role     @default(TELLER)
+  isActive            Boolean  @default(true)
+  forcePasswordChange Boolean  @default(false)
+  totpSecret          String?
+  totpEnabled         Boolean  @default(false)
+  permissions         Json     @default("[]")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   transactions   Transaction[]
   openingBals    OpeningBalance[]
@@ -50,13 +54,14 @@ model User {
 // ─────────────────────────────────────────────
 
 model Currency {
-  id       String  @id @default(uuid())
-  code     String  @unique  // e.g. "USD", "GBP"
-  nameEn   String           // e.g. "US Dollar"
-  nameAr   String           // e.g. "دولار أمريكي"
-  symbol   String           // e.g. "$"
-  isActive Boolean @default(true)
-  sortOrder Int     @default(0)
+  id          String  @id @default(uuid())
+  code        String  @unique  // e.g. "USD", "GBP"
+  nameEn      String           // e.g. "US Dollar"
+  nameAr      String           // e.g. "دولار أمريكي"
+  symbol      String           // e.g. "$"
+  countryCode String?  @db.VarChar(2)  // ISO 3166-1 alpha-2 e.g. "US", "GB"
+  isActive    Boolean @default(true)
+  sortOrder   Int     @default(0)
 
   openingBals         OpeningBalance[]
   exchangeRatesAsCcy  ExchangeRate[]   @relation("ExchangeRateCurrency")
@@ -119,6 +124,7 @@ model Transaction {
   receiptNumber   String          @unique  // Human-readable serial ID, e.g. TXN-2026-00001
   type            TransactionType
   customerName    String
+  customerEmail   String?         @db.VarChar(255)
   currencyIn      Currency        @relation("CurrencyIn",  fields: [currencyInId],  references: [id])
   currencyInId    String
   amountIn        Decimal         @db.Decimal(18, 2)
@@ -166,4 +172,16 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────────
+// APP SETTINGS (key-value store for runtime config)
+// ─────────────────────────────────────────────
+
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
 }

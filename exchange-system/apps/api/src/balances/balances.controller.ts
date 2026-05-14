@@ -18,6 +18,11 @@ export class BalancesController {
     return this.svc.getByDate(sessionDate);
   }
 
+  @Get('current')
+  getCurrentBalances(@Query('date') date?: string) {
+    return this.svc.getCurrentBalances(date);
+  }
+
   @Post()
   @UseGuards(RolesGuard)
   @Roles('ADMIN')

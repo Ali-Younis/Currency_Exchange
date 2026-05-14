@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { EmailService } from '../email/email.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { VoidTransactionDto } from './dto/void-transaction.dto';
 import { Prisma } from '@prisma/client';
@@ -16,6 +17,7 @@ export class TransactionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly email: EmailService,
   ) {}
 
   async create(dto: CreateTransactionDto, tellerId: string) {
@@ -68,6 +70,7 @@ export class TransactionsService {
         receiptNumber: generateReceiptNumber(),
         type: dto.type,
         customerName: dto.customerName,
+        customerEmail: dto.customerEmail,
         currencyInId: dto.currencyInId,
         amountIn: dto.amountIn,
         currencyOutId: dto.currencyOutId,
@@ -95,6 +98,22 @@ export class TransactionsService {
       entityId: tx.id,
       payload: { receiptNumber: tx.receiptNumber, type: tx.type, valueInGbp: valueInGbp.toString() },
     });
+
+    // Fire-and-forget email receipt
+    if (dto.customerEmail) {
+      void this.email.sendReceiptEmail({
+        to: dto.customerEmail,
+        receiptNumber: tx.receiptNumber,
+        customerName: dto.customerName,
+        type: dto.type,
+        amountIn: tx.amountIn.toString(),
+        currencyIn: tx.currencyIn.code,
+        amountOut: tx.amountOut.toString(),
+        currencyOut: tx.currencyOut.code,
+        rate: tx.rateApplied.toString(),
+        date: dto.sessionDate,
+      });
+    }
 
     return tx;
   }
