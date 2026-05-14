@@ -19,11 +19,21 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Redirect to login on 401
+// Redirect to login on 401 — but NOT during the pre-auth flow where
+// 401 means "wrong code" and the page should display the error itself.
+const PRE_AUTH_PATHS = [
+  '/auth/totp/setup',
+  '/auth/totp/enroll',
+  '/auth/totp/verify',
+  '/auth/change-password',
+];
+
 api.interceptors.response.use(
   (res) => res,
   (error) => {
-    if (error.response?.status === 401 && typeof window !== 'undefined') {
+    const url: string = error.config?.url ?? '';
+    const isPreAuth = PRE_AUTH_PATHS.some((p) => url.includes(p));
+    if (error.response?.status === 401 && !isPreAuth && typeof window !== 'undefined') {
       localStorage.removeItem('access_token');
       localStorage.removeItem('user');
       window.location.href = '/login';

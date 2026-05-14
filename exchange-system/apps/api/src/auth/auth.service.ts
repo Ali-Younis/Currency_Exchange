@@ -153,7 +153,14 @@ export class AuthService {
   // ── Private helpers ──────────────────────────────────────────────────────
 
   private issueShortLived(userId: string, purpose: TokenPurpose): string {
-    return this.jwtService.sign({ sub: userId, purpose }, { expiresIn: '5m' });
+    // Include a unique jti so tokens issued within the same clock-second
+    // have different payloads and are never blacklisted as a side-effect
+    // of a prior token with identical iat/exp.
+    const { randomUUID } = require('crypto') as typeof import('crypto');
+    return this.jwtService.sign(
+      { sub: userId, purpose, jti: randomUUID() },
+      { expiresIn: '5m' },
+    );
   }
 
   private async validateShortLived(token: string, expectedPurpose: TokenPurpose): Promise<string> {
