@@ -1,0 +1,165 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  TELLER
+}
+
+enum TransactionType {
+  BUY  // Agency buys foreign currency FROM customer
+  SELL // Agency sells foreign currency TO customer
+}
+
+// ─────────────────────────────────────────────
+// USERS
+// ─────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(uuid())
+  username     String   @unique
+  passwordHash String
+  fullName     String
+  role         Role     @default(TELLER)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  transactions   Transaction[]
+  openingBals    OpeningBalance[]
+  exchangeRates  ExchangeRate[]
+  auditLogs      AuditLog[]
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────
+// CURRENCIES
+// ─────────────────────────────────────────────
+
+model Currency {
+  id       String  @id @default(uuid())
+  code     String  @unique  // e.g. "USD", "GBP"
+  nameEn   String           // e.g. "US Dollar"
+  nameAr   String           // e.g. "دولار أمريكي"
+  symbol   String           // e.g. "$"
+  isActive Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  openingBals         OpeningBalance[]
+  exchangeRatesAsCcy  ExchangeRate[]   @relation("ExchangeRateCurrency")
+  transactionsIn      Transaction[]    @relation("CurrencyIn")
+  transactionsOut     Transaction[]    @relation("CurrencyOut")
+
+  @@map("currencies")
+}
+
+// ─────────────────────────────────────────────
+// EXCHANGE RATES
+// Admin sets buy/sell rates for each currency per session/day.
+// Base currency is GBP (ISO 4217: 826).
+// buyRate  = agency's rate when buying foreign currency from customer (lower)
+// sellRate = agency's rate when selling foreign currency to customer (higher)
+// Spread = sellRate - buyRate = agency profit per unit
+// ─────────────────────────────────────────────
+
+model ExchangeRate {
+  id         String   @id @default(uuid())
+  currency   Currency @relation("ExchangeRateCurrency", fields: [currencyId], references: [id])
+  currencyId String
+  buyRate    Decimal  @db.Decimal(18, 6)  // How many units of foreign currency per 1 GBP (agency buys)
+  sellRate   Decimal  @db.Decimal(18, 6)  // How many units of foreign currency per 1 GBP (agency sells)
+  effectiveDate DateTime @default(now())
+  setBy      User     @relation(fields: [setById], references: [id])
+  setById    String
+  createdAt  DateTime @default(now())
+
+  @@index([currencyId, effectiveDate])
+  @@map("exchange_rates")
+}
+
+// ─────────────────────────────────────────────
+// OPENING BALANCES (رصيد بداية المدة)
+// Recorded once per session/day per currency by Admin.
+// ─────────────────────────────────────────────
+
+model OpeningBalance {
+  id         String   @id @default(uuid())
+  currency   Currency @relation(fields: [currencyId], references: [id])
+  currencyId String
+  amount     Decimal  @db.Decimal(18, 2)
+  sessionDate DateTime @db.Date           // Date of the session (no time component)
+  setBy      User     @relation(fields: [setById], references: [id])
+  setById    String
+  createdAt  DateTime @default(now())
+
+  @@unique([currencyId, sessionDate])     // One opening balance per currency per day
+  @@index([sessionDate])
+  @@map("opening_balances")
+}
+
+// ─────────────────────────────────────────────
+// TRANSACTIONS
+// ─────────────────────────────────────────────
+
+model Transaction {
+  id              String          @id @default(uuid())
+  receiptNumber   String          @unique  // Human-readable serial ID, e.g. TXN-2026-00001
+  type            TransactionType
+  customerName    String
+  currencyIn      Currency        @relation("CurrencyIn",  fields: [currencyInId],  references: [id])
+  currencyInId    String
+  amountIn        Decimal         @db.Decimal(18, 2)
+  currencyOut     Currency        @relation("CurrencyOut", fields: [currencyOutId], references: [id])
+  currencyOutId   String
+  amountOut       Decimal         @db.Decimal(18, 2)
+  rateApplied     Decimal         @db.Decimal(18, 6)   // Snapshot of rate used at time of transaction
+  valueInGbp      Decimal         @db.Decimal(18, 2)   // Total value converted to GBP for accounting
+  notes           String?
+  isVoided        Boolean         @default(false)
+  voidedAt        DateTime?
+  voidedReason    String?
+  teller          User            @relation(fields: [tellerId], references: [id])
+  tellerId        String
+  createdAt       DateTime        @default(now())
+  sessionDate     DateTime        @db.Date             // The business date of this transaction
+
+  @@index([sessionDate])
+  @@index([tellerId])
+  @@index([type])
+  @@map("transactions")
+}
+
+// ─────────────────────────────────────────────
+// AUDIT LOG (Immutable — no updates/deletes)
+// ─────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String   // e.g. "LOGIN", "CREATE_TRANSACTION", "VOID_TRANSACTION", "SET_RATE"
+  entity     String?  // e.g. "Transaction", "ExchangeRate"
+  entityId   String?
+  ipAddress  String?
+  userAgent  String?
+  payload    Json?    // Full before/after snapshot of changed data
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
