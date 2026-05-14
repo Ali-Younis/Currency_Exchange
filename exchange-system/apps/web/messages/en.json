@@ -1,0 +1,78 @@
+{
+  "app": {
+    "name": "Exchange Manager",
+    "tagline": "Currency Exchange Management System"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "buy": "Buy",
+    "sell": "Sell",
+    "ledger": "Ledger",
+    "reports": "Reports",
+    "settings": "Settings",
+    "users": "Users",
+    "currencies": "Currencies",
+    "rates": "Exchange Rates",
+    "balances": "Opening Balances",
+    "logout": "Logout"
+  },
+  "auth": {
+    "login": "Login",
+    "username": "Username",
+    "password": "Password",
+    "loginButton": "Sign In",
+    "loginError": "Invalid username or password"
+  },
+  "transaction": {
+    "buy": "Buy",
+    "sell": "Sell",
+    "customerName": "Customer Name",
+    "currencyIn": "Currency In",
+    "amountIn": "Amount In",
+    "currencyOut": "Currency Out",
+    "amountOut": "Amount Out",
+    "rate": "Rate",
+    "valueGbp": "Value (GBP)",
+    "notes": "Notes",
+    "receipt": "Receipt",
+    "void": "Void",
+    "voidReason": "Void Reason",
+    "confirm": "Confirm Transaction",
+    "success": "Transaction recorded successfully",
+    "receiptNumber": "Receipt #"
+  },
+  "report": {
+    "session": "Session Report",
+    "ledger": "Daily Ledger",
+    "currency": "Currency",
+    "opening": "Opening Balance",
+    "totalBuys": "Total Buys",
+    "totalSells": "Total Sells",
+    "closing": "Closing Balance",
+    "exportPdf": "Export PDF",
+    "print": "Print",
+    "date": "Date"
+  },
+  "balance": {
+    "title": "Opening Balances",
+    "set": "Set Balance",
+    "amount": "Amount",
+    "saved": "Balances saved"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "search": "Search",
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "noData": "No data found",
+    "actions": "Actions",
+    "date": "Date",
+    "status": "Status",
+    "active": "Active",
+    "inactive": "Inactive"
+  }
+}
