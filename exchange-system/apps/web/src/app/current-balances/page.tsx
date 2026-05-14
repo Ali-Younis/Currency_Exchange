@@ -22,7 +22,7 @@ interface CurrentBalanceRow {
 function countryFlag(code: string | null | undefined): string {
   if (!code || code.length !== 2) return '';
   return [...code.toUpperCase()].map((c) =>
-    String.fromCodePoint(0x1f1e0 + c.charCodeAt(0) - 65),
+    String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65),
   ).join('');
 }
 
