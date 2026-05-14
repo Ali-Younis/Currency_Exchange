@@ -154,6 +154,95 @@ export interface SessionReport {
   rows: SessionReportRow[];
 }
 
+// ─── Admin Report DTOs ────────────────────────
+
+export interface ProfitReportRow {
+  currencyId: string;
+  currencyCode: string;
+  currencyNameEn: string;
+  symbol: string;
+  totalTransactions: number;
+  totalVolumeGbp: string;
+  totalProfitGbp: string;
+  avgProfitPerTxnGbp: string;
+}
+
+export interface ProfitReport {
+  startDate: string;
+  endDate: string;
+  grandTotalProfitGbp: string;
+  grandTotalVolumeGbp: string;
+  rows: ProfitReportRow[];
+}
+
+export interface TrendDataPoint {
+  date: string;
+  count: number;
+  volumeGbp: string;
+  buys: number;
+  sells: number;
+}
+
+export interface VolumeReport {
+  startDate: string;
+  endDate: string;
+  groupBy: 'day' | 'week' | 'month';
+  totalTransactions: number;
+  trendPoints: TrendDataPoint[];
+}
+
+export interface TopCustomerDto {
+  rank: number;
+  customerName: string;
+  totalTransactions: number;
+  totalVolumeGbp: string;
+  totalProfitGbp: string;
+}
+
+export interface TopCustomersReport {
+  startDate: string;
+  endDate: string;
+  customers: TopCustomerDto[];
+}
+
+export interface RateHistoryEntry {
+  id: string;
+  effectiveDate: string;
+  buyRate: string;
+  sellRate: string;
+  spread: string;
+  setBy: { id: string; fullName: string };
+  currencyCode: string;
+}
+
+export interface RateHistoryReport {
+  currencyId: string;
+  startDate: string;
+  endDate: string;
+  history: RateHistoryEntry[];
+}
+
+export interface AuditReportEntry {
+  id: string;
+  userId?: string;
+  user?: { id: string; fullName: string; username: string };
+  action: string;
+  entity?: string;
+  entityId?: string;
+  ipAddress?: string;
+  payload?: unknown;
+  createdAt: string;
+}
+
+export interface EndOfDayReport {
+  sessionDate: string;
+  totalTransactions: number;
+  voidedTransactions: number;
+  totalVolumeGbp: string;
+  totalProfitGbp: string;
+  balances: SessionReportRow[];
+}
+
 // ─── Pagination ──────────────────────────────
 
 export interface PaginatedResult<T> {

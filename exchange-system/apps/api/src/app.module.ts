@@ -9,7 +9,8 @@ import { ExchangeRatesModule } from './exchange-rates/exchange-rates.module';
 import { BalancesModule } from './balances/balances.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { ReportsModule } from './reports/reports.module';
-import Redis from 'ioredis';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 
 @Module({
   imports: [
@@ -24,16 +25,7 @@ import Redis from 'ioredis';
     TransactionsModule,
     ReportsModule,
   ],
-  providers: [
-    {
-      provide: 'REDIS_CLIENT',
-      useFactory: () =>
-        new Redis({
-          host: process.env.REDIS_HOST ?? 'localhost',
-          port: Number(process.env.REDIS_PORT ?? 6379),
-        }),
-    },
-  ],
-  exports: ['REDIS_CLIENT'],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}

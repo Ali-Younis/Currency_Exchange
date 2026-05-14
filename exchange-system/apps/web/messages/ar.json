@@ -50,8 +50,34 @@
     "totalSells": "إجمالي البيع",
     "closing": "رصيد الختام",
     "exportPdf": "تصدير PDF",
+    "exportExcel": "تصدير Excel",
     "print": "طباعة",
-    "date": "التاريخ"
+    "date": "التاريخ",
+    "startDate": "تاريخ البداية",
+    "endDate": "تاريخ النهاية",
+    "tabSession": "ملخص الجلسة",
+    "tabProfit": "تحليل الأرباح",
+    "tabVolume": "اتجاهات الحجم",
+    "tabCustomers": "أفضل العملاء",
+    "tabRates": "تاريخ الأسعار",
+    "tabAudit": "سجل التدقيق",
+    "tabEndOfDay": "نهاية اليوم",
+    "totalProfit": "إجمالي الربح (جنيه)",
+    "totalVolume": "إجمالي الحجم (جنيه)",
+    "avgProfit": "متوسط الربح/معاملة",
+    "transactions": "المعاملات",
+    "buys": "مشتريات",
+    "sells": "مبيعات",
+    "rank": "الترتيب",
+    "customer": "العميل",
+    "buyRate": "سعر الشراء",
+    "sellRate": "سعر البيع",
+    "spread": "هامش الربح",
+    "setBy": "أُعِدَّ بواسطة",
+    "action": "الإجراء",
+    "entity": "الكيان",
+    "ipAddress": "عنوان IP",
+    "voidedTxns": "معاملات ملغاة"
   },
   "balance": {
     "title": "رصيد بداية المدة",
@@ -73,6 +99,11 @@
     "date": "التاريخ",
     "status": "الحالة",
     "active": "نشط",
-    "inactive": "غير نشط"
-  }
+    "inactive": "غير نشط"  },
+  "dashboard": {
+    "todayBuys": "شراء اليوم",
+    "todaySells": "بيع اليوم",
+    "activeCurrencies": "عملات نشطة",
+    "todayProfit": "ربح اليوم التقديري",
+    "volumeTrend": "ترند الحجم خلال 7 أيام (جنيه)"  }
 }

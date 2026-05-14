@@ -50,8 +50,34 @@
     "totalSells": "Total Sells",
     "closing": "Closing Balance",
     "exportPdf": "Export PDF",
+    "exportExcel": "Export Excel",
     "print": "Print",
-    "date": "Date"
+    "date": "Date",
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "tabSession": "Session Summary",
+    "tabProfit": "P&L Analysis",
+    "tabVolume": "Volume Trends",
+    "tabCustomers": "Top Customers",
+    "tabRates": "Rate History",
+    "tabAudit": "Audit Trail",
+    "tabEndOfDay": "End of Day",
+    "totalProfit": "Total Profit (GBP)",
+    "totalVolume": "Total Volume (GBP)",
+    "avgProfit": "Avg Profit/Txn",
+    "transactions": "Transactions",
+    "buys": "Buys",
+    "sells": "Sells",
+    "rank": "Rank",
+    "customer": "Customer",
+    "buyRate": "Buy Rate",
+    "sellRate": "Sell Rate",
+    "spread": "Spread",
+    "setBy": "Set By",
+    "action": "Action",
+    "entity": "Entity",
+    "ipAddress": "IP Address",
+    "voidedTxns": "Voided Txns"
   },
   "balance": {
     "title": "Opening Balances",
@@ -74,5 +100,12 @@
     "status": "Status",
     "active": "Active",
     "inactive": "Inactive"
+  },
+  "dashboard": {
+    "todayBuys": "Today's Buys",
+    "todaySells": "Today's Sells",
+    "activeCurrencies": "Active Currencies",
+    "todayProfit": "Today's Est. Profit",
+    "volumeTrend": "7-Day Volume Trend (GBP)"
   }
 }

@@ -1,10 +1,11 @@
 {
+  "exclude": ["node_modules", "prisma.config.ts", "prisma/seed.ts"],
   "compilerOptions": {
     "module": "nodenext",
     "moduleResolution": "nodenext",
+    "rootDir": "./src",
     "resolvePackageJsonExports": true,
     "esModuleInterop": true,
-    "isolatedModules": true,
     "declaration": true,
     "removeComments": true,
     "emitDecoratorMetadata": true,

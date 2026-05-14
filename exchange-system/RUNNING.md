@@ -1,75 +1,142 @@
 # Running the Exchange Manager System
 
-## Prerequisites
-
-| Tool | Version | Notes |
-|------|---------|-------|
-| Node.js | 20 or 24 | https://nodejs.org |
-| npm | 10+ | Comes with Node.js |
-| Docker Desktop | 4+ | https://www.docker.com/products/docker-desktop — **must be running** |
-
 ---
 
-## First-Time Setup
+## Option A — Production (Docker only) — Recommended
 
-### 1. Install dependencies
+> **Only Docker Desktop is required.** No Node.js, npm, or any other local tooling needed.
+> Works on macOS, Windows, Linux, and any public cloud (AWS, GCP, Azure, etc.).
 
-Open a terminal in the `exchange-system` folder and run:
+### Prerequisites
 
-```powershell
-npm install
+| Tool | Notes |
+|------|-------|
+| Docker Desktop 4+ | https://www.docker.com/products/docker-desktop |
+
+### 1. Start Docker Desktop
+
+Open Docker Desktop and wait until the status bar shows **"Engine running"**.
+
+### 2. (Optional) Configure secrets
+
+```sh
+cp .env.example .env
+# Edit .env — change JWT_SECRET to a long random string
 ```
 
-This installs all packages for the API, web app, and shared types in one go.
+If you skip this step, a default development secret is used automatically.
 
-### 2. Start Docker Desktop
+### 3. Start the full system
 
-Open Docker Desktop and wait until it shows **"Engine running"** in the bottom-left corner.
-
-### 3. Start the database and Redis
-
-```powershell
-docker compose up -d postgres redis
+```sh
+docker compose up -d
 ```
 
-Wait about 10 seconds for PostgreSQL to be ready.
+That's it. Docker will:
+1. Pull PostgreSQL 16 and Redis 7 images
+2. Build the NestJS API and Next.js web images (all `npm install` runs **inside** containers)
+3. Start postgres → redis → api (runs migrations + seeds data) → web → nginx
 
-### 4. Run the database migration
+First build takes ~3–5 minutes. Subsequent starts are near-instant (layers are cached).
 
-```powershell
-cd apps/api
-npx prisma migrate dev --name init
-```
+### 4. Access the application
 
-This creates all the tables in the database.
-
-### 5. Seed default data
-
-```powershell
-npx prisma db seed
-```
-
-This loads 12 currencies (GBP, USD, EUR, JOD, SAR, AED, CHF, EGP, BHD, AUD, CAD, TRY) and creates the default admin account.
+| URL | Service |
+|-----|---------|
+| http://localhost | Web application (via nginx, **recommended entry point**) |
+| http://localhost:3000 | Web application (direct, for debugging) |
+| http://localhost:3001/api/v1 | API (direct, for debugging) |
 
 **Default login:**
+
 | Field | Value |
 |-------|-------|
 | Username | `admin` |
 | Password | `admin1234` |
 
-> Change the password after first login.
+> Change the password immediately after first login.
+
+### Useful commands
+
+```sh
+# View live logs from all services
+docker compose logs -f
+
+# View only API logs
+docker compose logs -f api
+
+# Stop everything (keeps database data)
+docker compose down
+
+# Stop and wipe all data (fresh start)
+docker compose down -v
+
+# Rebuild images after code changes
+docker compose up -d --build
+```
 
 ---
 
-## Running in Development Mode
+## Option B — Development (hot-reload)
 
-From the `exchange-system` folder:
+> Requires Node.js 20+ and npm 10+ installed locally.
+> Use this for active development — changes to source files reload instantly.
 
-```powershell
-npm run dev
+### Prerequisites
+
+| Tool | Version | Notes |
+|------|---------|-------|
+| Node.js | 20 or 24 | https://nodejs.org |
+| npm | 10+ | Comes with Node.js |
+| Docker Desktop | 4+ | For PostgreSQL and Redis |
+
+### 1. Start the database services
+
+```sh
+docker compose up -d postgres redis
 ```
 
-This starts both apps in parallel using Turborepo:
+### 2. Install dependencies
+
+```sh
+# From exchange-system/ root
+npm install
+```
+
+### 3. Configure environment
+
+```sh
+# Create API env file
+cat > apps/api/.env << 'EOF'
+PORT=3001
+DATABASE_URL="postgresql://exchange_user:exchange_pass@localhost:5432/exchange_db?schema=public"
+REDIS_HOST=localhost
+REDIS_PORT=6379
+JWT_SECRET=dev_secret_change_in_production
+JWT_EXPIRES_IN=8h
+CORS_ORIGIN=http://localhost:3000
+EOF
+
+# Create web env file
+cat > apps/web/.env.local << 'EOF'
+API_INTERNAL_URL=http://localhost:3001
+EOF
+```
+
+### 4. Initialize the database (first time only)
+
+```sh
+cd apps/api
+npx prisma migrate dev --name init
+npx prisma db seed
+cd ../..
+```
+
+### 5. Start dev servers
+
+```sh
+npm run dev
+```
 
 | App | URL |
 |-----|-----|
@@ -78,110 +145,34 @@ This starts both apps in parallel using Turborepo:
 
 ---
 
-## Running in Production (Docker)
+## Environment Variables Reference
 
-From the `exchange-system` folder:
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `JWT_SECRET` | `change_me_in_production_please` | JWT signing secret — **must change in production** |
+| `JWT_EXPIRES_IN` | `8h` | Token expiry (e.g. `8h`, `1d`) |
+| `CORS_ORIGIN` | `http://localhost:3000` | Allowed API origin for browser requests |
+| `API_INTERNAL_URL` | `http://api:3001` | Where the Next.js server forwards `/api/v1/*` requests at runtime |
 
-```powershell
-docker compose up -d
-```
-
-This builds and starts all four services: `postgres`, `redis`, `api`, and `web`.
-
-| Service | Port |
-|---------|------|
-| Web | http://localhost:3000 |
-| API | http://localhost:3001/api/v1 |
-| PostgreSQL | localhost:5432 (internal) |
-| Redis | localhost:6379 (internal) |
-
-To stop everything:
-
-```powershell
-docker compose down
-```
-
-To stop and wipe the database:
-
-```powershell
-docker compose down -v
-```
+All variables can be set in a `.env` file in the `exchange-system/` root (Docker picks it up automatically).
 
 ---
 
-## Day-to-Day Commands
+## Cloud Deployment
 
-All commands are run from the `exchange-system` folder unless noted.
+The system is fully platform-agnostic. Deploy by:
 
-| Task | Command |
-|------|---------|
-| Start dev servers | `npm run dev` |
-| Build all apps | `npm run build` |
-| Run API tests | `npm run test` |
-| Open Prisma Studio (DB browser) | `cd apps/api && npx prisma studio` |
-| Run a new DB migration | `cd apps/api && npx prisma migrate dev --name <description>` |
-| View Docker logs | `docker compose logs -f` |
-| View API logs only | `docker compose logs -f api` |
+1. Pushing the repo to your cloud VM / container host
+2. Copying `.env.example` → `.env` and setting production values
+3. Running `docker compose up -d`
 
----
+For managed container platforms (AWS ECS, GCP Cloud Run, Azure ACI):
+- Build and push images to a registry: `docker compose build && docker compose push`
+- Set the environment variables in your platform's secrets manager
+- Point your load balancer to the nginx container on port 80
 
-## Environment Variables
 
-### API (`apps/api/.env`)
 
-```
-PORT=3001
-DATABASE_URL="postgresql://exchange_user:exchange_pass@localhost:5432/exchange_db?schema=public"
-REDIS_HOST=localhost
-REDIS_PORT=6379
-JWT_SECRET=dev_secret_change_in_production_abc123xyz
-JWT_EXPIRES_IN=8h
-CORS_ORIGIN=http://localhost:3000
-```
-
-### Web (`apps/web/.env.local`)
-
-```
-NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1
-```
-
-> For production Docker, these are set inside `docker-compose.yml`. The `.env` file in the monorepo root can override defaults (e.g. `JWT_SECRET`).
-
----
-
-## Folder Structure
-
-```
-exchange-system/
-├── apps/
-│   ├── api/          NestJS backend (port 3001)
-│   └── web/          Next.js frontend (port 3000)
-├── packages/
-│   └── shared/       TypeScript types shared between API and web
-├── docker-compose.yml
-└── RUNNING.md        ← you are here
-```
-
----
-
-## Troubleshooting
-
-**Docker Engine not found**
-Start Docker Desktop and wait for the engine to be ready before running any `docker` commands.
-
-**`npx prisma migrate dev` fails with "connection refused"**
-PostgreSQL is not ready yet. Wait a few seconds and try again, or check with:
-```powershell
-docker compose ps
-```
-The `postgres` service should show `healthy`.
-
-**Port 3000 or 3001 already in use**
-Find and stop the process using that port:
-```powershell
-netstat -ano | findstr :3000
-taskkill /PID <pid> /F
-```
 
 **Web app shows blank page or API errors**
 Check the browser console. Most issues are either:

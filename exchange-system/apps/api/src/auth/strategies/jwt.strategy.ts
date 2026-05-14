@@ -17,7 +17,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(req: Request, payload: AuthTokenPayload): Promise<AuthTokenPayload> {
     // Check Redis blacklist — token revoked on logout
-    const authHeader = (req.headers as Record<string, string>)['authorization'] ?? '';
+    const authHeader = (req.headers as unknown as Record<string, string>)['authorization'] ?? '';
     const token = authHeader.replace('Bearer ', '');
     const isBlacklisted = await this.redis.get(`bl:${token}`);
     if (isBlacklisted) {

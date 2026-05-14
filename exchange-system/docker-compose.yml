@@ -68,12 +68,30 @@ services:
     restart: unless-stopped
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001/api/v1}
+      # Runtime env var: Next.js server uses this to forward /api/v1/* requests
+      # to the API container. NOT baked into the browser bundle.
+      API_INTERNAL_URL: ${API_INTERNAL_URL:-http://api:3001}
     ports:
       - "3000:3000"
+
+  # ── Nginx: single entry point on port 80 ──────────────────────────────────
+  # Routes /api/v1/* directly to the NestJS API.
+  # Routes everything else to the Next.js frontend.
+  # Enables clean deployment behind any cloud load balancer (AWS ALB, GCP NEG, etc.)
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: exchange_nginx
+    restart: unless-stopped
+    depends_on:
+      - web
+      - api
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
 
 volumes:
   postgres_data:

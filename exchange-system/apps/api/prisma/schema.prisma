@@ -127,6 +127,10 @@ model Transaction {
   amountOut       Decimal         @db.Decimal(18, 2)
   rateApplied     Decimal         @db.Decimal(18, 6)   // Snapshot of rate used at time of transaction
   valueInGbp      Decimal         @db.Decimal(18, 2)   // Total value converted to GBP for accounting
+  // ── Profit snapshot fields (filled on every transaction create) ────────────
+  buyRateSnapshot  Decimal?       @db.Decimal(18, 6)   // Buy rate in effect when transaction was created
+  sellRateSnapshot Decimal?       @db.Decimal(18, 6)   // Sell rate in effect when transaction was created
+  spreadProfitGbp  Decimal?       @db.Decimal(18, 4)   // Estimated spread profit in GBP for this transaction
   notes           String?
   isVoided        Boolean         @default(false)
   voidedAt        DateTime?

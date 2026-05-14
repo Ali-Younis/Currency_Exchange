@@ -1,7 +1,10 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL ?? '/api/v1',
+  // Always use a relative path so the browser calls the same host/port
+  // that served the page. Next.js rewrites (next.config.ts) forward
+  // /api/v1/* to the NestJS backend at runtime via API_INTERNAL_URL.
+  baseURL: '/api/v1',
   withCredentials: false,
 });
 

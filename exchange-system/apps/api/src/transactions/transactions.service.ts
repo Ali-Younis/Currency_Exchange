@@ -37,6 +37,32 @@ export class TransactionsService {
       valueInGbp = new Prisma.Decimal(0);
     }
 
+    // ── Profit snapshot: fetch the current exchange rate for the foreign currency
+    const foreignCurrencyId =
+      gbpCurrency && dto.currencyInId === gbpCurrency.id ? dto.currencyOutId : dto.currencyInId;
+
+    const latestRate = await this.prisma.exchangeRate.findFirst({
+      where: { currencyId: foreignCurrencyId },
+      orderBy: { effectiveDate: 'desc' },
+    });
+
+    let buyRateSnapshot: Prisma.Decimal | null = null;
+    let sellRateSnapshot: Prisma.Decimal | null = null;
+    let spreadProfitGbp: Prisma.Decimal | null = null;
+
+    if (latestRate) {
+      buyRateSnapshot = new Prisma.Decimal(latestRate.buyRate);
+      sellRateSnapshot = new Prisma.Decimal(latestRate.sellRate);
+      // Spread profit = valueInGbp × (sellRate - buyRate) / buyRate
+      // sellRate > buyRate → agency earns money on every unit exchanged
+      if (buyRateSnapshot.gt(0)) {
+        const spread = sellRateSnapshot.minus(buyRateSnapshot);
+        spreadProfitGbp = valueInGbp.mul(spread).div(buyRateSnapshot);
+        // Clamp to zero — should never be negative, but guard against bad rate data
+        if (spreadProfitGbp.lt(0)) spreadProfitGbp = new Prisma.Decimal(0);
+      }
+    }
+
     const tx = await this.prisma.transaction.create({
       data: {
         receiptNumber: generateReceiptNumber(),
@@ -48,6 +74,9 @@ export class TransactionsService {
         amountOut: dto.amountOut,
         rateApplied: dto.rateApplied,
         valueInGbp,
+        buyRateSnapshot,
+        sellRateSnapshot,
+        spreadProfitGbp,
         notes: dto.notes,
         tellerId,
         sessionDate: new Date(dto.sessionDate),
