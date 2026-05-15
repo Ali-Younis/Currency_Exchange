@@ -7,6 +7,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { EmailService } from '../email/email.service';
 import * as bcrypt from 'bcryptjs';
 import { Redis } from 'ioredis';
 import { authenticator } from 'otplib';
@@ -26,6 +27,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly auditService: AuditService,
+    private readonly emailService: EmailService,
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
   ) {}
 
@@ -148,6 +150,56 @@ export class AuthService {
       await this.redis.setex(`bl:${token}`, ttl, '1');
     }
     await this.auditService.log({ userId, action: 'LOGOUT' });
+  }
+
+  async forgotPassword(email: string): Promise<void> {
+    const { randomUUID } = require('crypto') as typeof import('crypto');
+    // Find user silently — never reveal whether the email exists
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user || !user.isActive) return;
+
+    const token = randomUUID();
+    const expiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { passwordResetToken: token, passwordResetExpiry: expiry },
+    });
+
+    const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
+    const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
+    await this.emailService.sendPasswordResetEmail(email, resetUrl, user.fullName);
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    if (!PASSWORD_POLICY_REGEX.test(newPassword)) {
+      throw new BadRequestException(
+        'Password must be ≥12 chars with uppercase, lowercase, digit and special character',
+      );
+    }
+
+    const user = await this.prisma.user.findFirst({
+      where: { passwordResetToken: token },
+    });
+
+    if (!user || !user.passwordResetExpiry) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    if (user.passwordResetExpiry < new Date()) {
+      throw new BadRequestException('Reset token has expired');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        forcePasswordChange: false,
+        passwordResetToken: null,
+        passwordResetExpiry: null,
+      },
+    });
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────

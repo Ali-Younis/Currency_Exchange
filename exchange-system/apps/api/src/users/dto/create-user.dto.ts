@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, MinLength, MaxLength, IsIn } from 'class-validator';
+import { IsString, IsNotEmpty, MinLength, MaxLength, IsIn, IsEmail, IsOptional } from 'class-validator';
 import { Role } from '@exchange/shared';
 
 export class CreateUserDto {
@@ -20,4 +20,9 @@ export class CreateUserDto {
 
   @IsIn(['ADMIN', 'TELLER'])
   role!: Role;
+
+  @IsEmail()
+  @IsNotEmpty()
+  @MaxLength(255)
+  email!: string;
 }

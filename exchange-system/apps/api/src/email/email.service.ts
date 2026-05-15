@@ -72,6 +72,38 @@ export class EmailService {
     }
   }
 
+  async sendPasswordResetEmail(to: string, resetUrl: string, fullName: string): Promise<void> {
+    const transport = await this.createTransport();
+    if (!transport) {
+      this.logger.warn('SMTP not configured — password reset email not sent');
+      return;
+    }
+
+    const from = (await this.settings.get('smtp_from')) ?? 'noreply@exchange-manager.local';
+
+    const html = `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+        <h2 style="color:#0a146e">Password Reset Request</h2>
+        <p>Dear ${fullName},</p>
+        <p>We received a request to reset your password. Click the button below to set a new password. This link expires in <strong>1 hour</strong>.</p>
+        <div style="text-align:center;margin:32px 0">
+          <a href="${resetUrl}" style="background:#0a146e;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block">
+            Reset Password
+          </a>
+        </div>
+        <p style="color:#888;font-size:13px">If you did not request this, you can safely ignore this email. Your password will not change.</p>
+        <p style="color:#888;font-size:12px;margin-top:24px">Exchange Manager — Currency Exchange System</p>
+      </div>
+    `;
+
+    try {
+      await transport.sendMail({ from, to, subject: 'Password Reset — Exchange Manager', html });
+      this.logger.log(`Password reset email sent to ${to}`);
+    } catch (err) {
+      this.logger.error(`Failed to send password reset email: ${String(err)}`);
+    }
+  }
+
   async sendTestEmail(to: string): Promise<void> {
     const transport = await this.createTransport();
     if (!transport) throw new Error('SMTP not configured');

@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
+import Link from 'next/link';
 
 export default function LoginPage() {
   const t = useTranslations('auth');
@@ -15,6 +16,14 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [logo, setLogo] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/v1/app-settings/public/logo')
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.value) setLogo(d.value); })
+      .catch(() => {});
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -46,7 +55,11 @@ export default function LoginPage() {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
         {/* Brand */}
         <div className="text-center mb-8">
-          <div className="text-3xl font-bold text-[#0a146e] mb-1">Exchange</div>
+          {logo ? (
+            <img src={logo} alt="Company Logo" className="h-16 mx-auto mb-2 object-contain" />
+          ) : (
+            <div className="text-3xl font-bold text-[#0a146e] mb-1">Exchange</div>
+          )}
           <div className="text-sm text-gray-400">Currency Exchange Management System</div>
         </div>
 
@@ -87,6 +100,11 @@ export default function LoginPage() {
               >
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
+            </div>
+            <div className="text-end mt-1">
+              <Link href="/forgot-password" className="text-xs text-[#0a146e] hover:underline">
+                Forgot password?
+              </Link>
             </div>
           </div>
 

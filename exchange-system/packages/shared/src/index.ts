@@ -57,6 +57,7 @@ export interface UserSummary {
   id: string;
   username: string;
   fullName: string;
+  email?: string | null;
   role: Role;
   isActive: boolean;
   permissions?: string[];
@@ -69,6 +70,7 @@ export interface CreateUserDto {
   password: string;
   fullName: string;
   role: Role;
+  email: string;
 }
 
 // ─── Currencies ──────────────────────────────

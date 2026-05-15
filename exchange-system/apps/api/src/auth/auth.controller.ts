@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { TotpEnrollDto, TotpVerifyDto } from './dto/totp.dto';
+import { ForgotPasswordDto, ResetPasswordDto } from './dto/forgot-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { AuthTokenPayload } from '@exchange/shared';
@@ -48,5 +49,20 @@ export class AuthController {
   logout(@Req() req: Request, @CurrentUser() user: AuthTokenPayload) {
     const token = (req.headers['authorization'] ?? '').replace('Bearer ', '');
     return this.authService.logout(token, user.sub);
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    await this.authService.forgotPassword(dto.email);
+    // Always return the same message to avoid email enumeration
+    return { message: 'If an account with that email exists, a reset link has been sent.' };
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    await this.authService.resetPassword(dto.token, dto.newPassword);
+    return { message: 'Password has been reset successfully. You can now log in.' };
   }
 }

@@ -13,7 +13,7 @@ export class UsersService {
   async findAll() {
     return this.prisma.user.findMany({
       select: {
-        id: true, username: true, fullName: true, role: true, isActive: true,
+        id: true, username: true, fullName: true, email: true, role: true, isActive: true,
         permissions: true, totpEnabled: true, forcePasswordChange: true, createdAt: true,
       },
       orderBy: { createdAt: 'asc' },
@@ -24,7 +24,7 @@ export class UsersService {
     const user = await this.prisma.user.findUnique({
       where: { id },
       select: {
-        id: true, username: true, fullName: true, role: true, isActive: true,
+        id: true, username: true, fullName: true, email: true, role: true, isActive: true,
         permissions: true, totpEnabled: true, forcePasswordChange: true, createdAt: true,
       },
     });
@@ -36,17 +36,21 @@ export class UsersService {
     const existing = await this.prisma.user.findUnique({ where: { username: dto.username } });
     if (existing) throw new ConflictException('Username already exists');
 
+    const emailExists = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    if (emailExists) throw new ConflictException('Email already in use');
+
     const passwordHash = await bcrypt.hash(dto.password, SALT_ROUNDS);
     return this.prisma.user.create({
       data: {
         username: dto.username,
         passwordHash,
         fullName: dto.fullName,
+        email: dto.email,
         role: dto.role,
         forcePasswordChange: true,  // new users must change password on first login
       },
       select: {
-        id: true, username: true, fullName: true, role: true, isActive: true,
+        id: true, username: true, fullName: true, email: true, role: true, isActive: true,
         permissions: true, totpEnabled: true, forcePasswordChange: true, createdAt: true,
       },
     });
@@ -63,7 +67,7 @@ export class UsersService {
       where: { id },
       data,
       select: {
-        id: true, username: true, fullName: true, role: true, isActive: true,
+        id: true, username: true, fullName: true, email: true, role: true, isActive: true,
         permissions: true, totpEnabled: true, forcePasswordChange: true, updatedAt: true,
       },
     });

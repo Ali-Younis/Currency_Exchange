@@ -6,6 +6,7 @@ import { EmailService } from '../email/email.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { IsString, IsNotEmpty, IsEmail, MaxLength } from 'class-validator';
 
 class SetSettingDto {
@@ -33,6 +34,14 @@ export class AppSettingsController {
   @Get()
   getAll() {
     return this.svc.getAll();
+  }
+
+  /** Unauthenticated — used on login page before the user has a token */
+  @Get('public/logo')
+  @Public()
+  async getPublicLogo() {
+    const value = await this.svc.get('logo_base64');
+    return { key: 'logo_base64', value: value ?? null };
   }
 
   @Get(':key')

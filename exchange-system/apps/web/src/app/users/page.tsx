@@ -10,11 +10,11 @@ import { UserSummary, CreateUserDto } from '@exchange/shared';
 const TELLER_PERMISSIONS = ['buy', 'sell', 'ledger', 'reports'] as const;
 
 function UserModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState<CreateUserDto & { password: string }>({
-    username: '',
+  const [form, setForm] = useState<CreateUserDto & { password: string }>({  username: '',
     password: '',
     fullName: '',
     role: 'TELLER',
+    email: '',
   });
   const [error, setError] = useState('');
 
@@ -41,6 +41,11 @@ function UserModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Full Name</label>
             <input value={form.fullName} onChange={(e) => setForm((p) => ({ ...p, fullName: e.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Email</label>
+            <input type="email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]" />
           </div>
           <div>
@@ -80,10 +85,11 @@ function EditPanel({
 }) {
   const [permissions, setPermissions] = useState<string[]>(user.permissions ?? []);
   const [forcePasswordChange, setForcePasswordChange] = useState(user.forcePasswordChange ?? false);
+  const [email, setEmail] = useState(user.email ?? '');
   const [msg, setMsg] = useState('');
 
   const mutation = useMutation({
-    mutationFn: (data: { permissions: string[]; forcePasswordChange: boolean }) =>
+    mutationFn: (data: { permissions: string[]; forcePasswordChange: boolean; email?: string }) =>
       api.patch(`/users/${user.id}`, data),
     onSuccess: () => {
       setMsg('Saved!');
@@ -108,6 +114,16 @@ function EditPanel({
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
         <h2 className="text-lg font-semibold text-gray-800 mb-1">Edit: {user.fullName}</h2>
         <p className="text-xs text-gray-400 mb-4">@{user.username} · {user.role}</p>
+
+        <div className="mb-4">
+          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Email</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]"
+          />
+        </div>
 
         {user.role === 'TELLER' && (
           <div className="mb-4">
@@ -157,7 +173,7 @@ function EditPanel({
         <div className="flex justify-end gap-3">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
           <button
-            onClick={() => mutation.mutate({ permissions, forcePasswordChange })}
+            onClick={() => mutation.mutate({ permissions, forcePasswordChange, email: email || undefined })}
             disabled={mutation.isPending}
             className="bg-[#0a146e] text-white text-sm font-semibold px-5 py-2 rounded-lg hover:bg-[#070e57] disabled:opacity-60"
           >
@@ -219,6 +235,7 @@ export default function UsersPage() {
               <tr className="bg-gray-50 text-gray-500 text-xs uppercase border-b border-gray-200">
                 <th className="text-left px-5 py-3">Username</th>
                 <th className="text-left px-5 py-3">Full Name</th>
+                <th className="text-left px-5 py-3">Email</th>
                 <th className="text-left px-5 py-3">Role</th>
                 <th className="text-left px-5 py-3">TOTP</th>
                 <th className="text-left px-5 py-3">Status</th>
@@ -230,6 +247,7 @@ export default function UsersPage() {
                 <tr key={u.id} className="border-t border-gray-100 hover:bg-gray-50">
                   <td className="px-5 py-3 font-mono">{u.username}</td>
                   <td className="px-5 py-3">{u.fullName}</td>
+                  <td className="px-5 py-3 text-gray-500 text-xs">{u.email ?? '—'}</td>
                   <td className="px-5 py-3">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
                       u.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'

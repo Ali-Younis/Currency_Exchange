@@ -20,4 +20,9 @@
 ----------
 17- Add a possibility to forgot and reset password by email sent to the user
 18- All users including the admin should be forced to change their password at the first login
-19- Populate the system with reasonable data so I can test the different functionalities like selling, buying, current balance, opening balance, etc...
+19- Populate the system with reasonable data so I can test the different functionalities like selling, buying, current balance, opening balance, etc... Also populate the reports, so I see a sample of them.
+20- Add the possibility for admin to delete a user, except for the admin user
+21- Update flags under the 'Currencies' tab
+22- Put currency full name between paranthesis under the 'Exchange Rate' tab
+23- Under 'Opening Balances) add the flag before the abbreviation and the full name within paranthesis after it, so the user don't get confused on what the abbreviation would mean. Use the same format under 'Exchange Rates'
+24- Company logo should also be available in login page (before user logs in)

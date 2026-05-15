@@ -28,18 +28,21 @@ enum TransactionType {
 // ─────────────────────────────────────────────
 
 model User {
-  id                  String   @id @default(uuid())
-  username            String   @unique
+  id                  String    @id @default(uuid())
+  username            String    @unique
   passwordHash        String
   fullName            String
-  role                Role     @default(TELLER)
-  isActive            Boolean  @default(true)
-  forcePasswordChange Boolean  @default(false)
+  email               String?   @unique
+  role                Role      @default(TELLER)
+  isActive            Boolean   @default(true)
+  forcePasswordChange Boolean   @default(false)
   totpSecret          String?
-  totpEnabled         Boolean  @default(false)
-  permissions         Json     @default("[]")
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  totpEnabled         Boolean   @default(false)
+  permissions         Json      @default("[]")
+  passwordResetToken  String?
+  passwordResetExpiry DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   transactions   Transaction[]
   openingBals    OpeningBalance[]

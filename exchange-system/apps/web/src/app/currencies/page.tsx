@@ -11,7 +11,7 @@ function countryFlag(code: string | null | undefined): string {
   if (!code || code.length !== 2) return '';
   // Convert 2-letter ISO code to regional indicator emoji (flag)
   return [...code.toUpperCase()].map((c) =>
-    String.fromCodePoint(0x1f1e0 + c.charCodeAt(0) - 65),
+    String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65),
   ).join('');
 }
 

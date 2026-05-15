@@ -8,6 +8,13 @@ import { useState } from 'react';
 import api from '@/lib/api';
 import { CurrencyDto, OpeningBalanceDto } from '@exchange/shared';
 
+function countryFlag(code: string | null | undefined): string {
+  if (!code || code.length !== 2) return '';
+  return [...code.toUpperCase()].map((c) =>
+    String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65),
+  ).join('');
+}
+
 export default function BalancesPage() {
   const t = useTranslations('balance');
   const qc = useQueryClient();
@@ -78,7 +85,10 @@ export default function BalancesPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           {currencies?.map((c) => (
             <div key={c.id} className="flex items-center gap-3">
-              <div className="w-16 text-sm font-bold text-gray-700 text-right">{c.code}</div>
+              <div className="w-36 text-sm font-bold text-gray-700 text-right">
+                <span className="me-1">{countryFlag(c.countryCode)}</span>{c.code}
+                <span className="font-normal text-gray-500 ms-1">({c.nameEn})</span>
+              </div>
               <input
                 type="number"
                 step="0.01"

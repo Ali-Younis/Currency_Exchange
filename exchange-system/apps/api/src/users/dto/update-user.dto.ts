@@ -1,4 +1,4 @@
-import { IsString, IsOptional, MinLength, MaxLength, IsBoolean, IsIn, IsArray, Allow } from 'class-validator';
+import { IsString, IsOptional, MinLength, MaxLength, IsBoolean, IsIn, IsArray, Allow, IsEmail } from 'class-validator';
 import { Role } from '@exchange/shared';
 
 export class UpdateUserDto {
@@ -6,6 +6,11 @@ export class UpdateUserDto {
   @IsString()
   @MaxLength(100)
   fullName?: string;
+
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(255)
+  email?: string;
 
   @IsOptional()
   @IsString()

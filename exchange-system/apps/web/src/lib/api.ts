@@ -26,6 +26,9 @@ const PRE_AUTH_PATHS = [
   '/auth/totp/enroll',
   '/auth/totp/verify',
   '/auth/change-password',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  '/app-settings/public/',
 ];
 
 api.interceptors.response.use(
