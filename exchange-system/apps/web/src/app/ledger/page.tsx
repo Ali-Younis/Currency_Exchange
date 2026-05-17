@@ -61,7 +61,7 @@ export default function LedgerPage() {
         <div className="space-y-6">
           {/* Buys */}
           <LedgerTable
-            title="Buy Transactions (عمليات الشراء)"
+            title={t('transaction.buyTitle')}
             transactions={buys}
             colorClass="text-green-600"
             isAdmin={isAdmin}
@@ -69,7 +69,7 @@ export default function LedgerPage() {
           />
           {/* Sells */}
           <LedgerTable
-            title="Sell Transactions (عمليات البيع)"
+            title={t('transaction.sellTitle')}
             transactions={sells}
             colorClass="text-red-600"
             isAdmin={isAdmin}

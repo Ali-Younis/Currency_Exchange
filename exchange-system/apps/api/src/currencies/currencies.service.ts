@@ -31,4 +31,9 @@ export class CurrenciesService {
     await this.findOne(id);
     return this.prisma.currency.update({ where: { id }, data: { isActive } });
   }
+
+  async update(id: string, data: { sortOrder?: number }) {
+    await this.findOne(id);
+    return this.prisma.currency.update({ where: { id }, data });
+  }
 }

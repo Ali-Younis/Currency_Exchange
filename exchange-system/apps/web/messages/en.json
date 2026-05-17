@@ -7,6 +7,7 @@
     "dashboard": "Dashboard",
     "buy": "Buy",
     "sell": "Sell",
+    "cross": "Cross-Currency",
     "ledger": "Ledger",
     "reports": "Reports",
     "settings": "Settings",
@@ -62,7 +63,9 @@
     "voidReason": "Void Reason",
     "confirm": "Confirm Transaction",
     "success": "Transaction recorded successfully",
-    "receiptNumber": "Receipt #"
+    "receiptNumber": "Receipt #",
+    "buyTitle": "Buy Transactions",
+    "sellTitle": "Sell Transactions"
   },
   "report": {
     "session": "Session Report",

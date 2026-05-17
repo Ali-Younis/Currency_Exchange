@@ -4,7 +4,7 @@ import {
 import { TransactionType } from '@exchange/shared';
 
 export class CreateTransactionDto {
-  @IsIn(['BUY', 'SELL'])
+  @IsIn(['BUY', 'SELL', 'CROSS'])
   type!: TransactionType;
 
   @IsString()

@@ -7,12 +7,11 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Public } from '../auth/decorators/public.decorator';
-import { IsString, IsNotEmpty, IsEmail, MaxLength } from 'class-validator';
+import { IsString, IsNotEmpty, IsEmail } from 'class-validator';
 
 class SetSettingDto {
   @IsString()
   @IsNotEmpty()
-  @MaxLength(65535)
   value!: string;
 }
 

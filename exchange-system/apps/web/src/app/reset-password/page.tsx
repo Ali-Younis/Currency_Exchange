@@ -3,7 +3,15 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Check } from 'lucide-react';
+
+const RULES = [
+  { label: 'At least 12 characters', test: (p: string) => p.length >= 12 },
+  { label: 'Uppercase letter', test: (p: string) => /[A-Z]/.test(p) },
+  { label: 'Lowercase letter', test: (p: string) => /[a-z]/.test(p) },
+  { label: 'Number', test: (p: string) => /\d/.test(p) },
+  { label: 'Special character (@$!%*?&)', test: (p: string) => /[@$!%*?&]/.test(p) },
+];
 
 function ResetPasswordForm() {
   const router = useRouter();
@@ -71,11 +79,6 @@ function ResetPasswordForm() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
-            <p className="text-sm text-gray-600">
-              Enter your new password. It must be at least 12 characters and include uppercase,
-              lowercase, a digit, and a special character.
-            </p>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
               <div className="relative">
@@ -97,6 +100,21 @@ function ResetPasswordForm() {
                 </button>
               </div>
             </div>
+
+            {/* Password complexity checklist */}
+            {newPassword.length > 0 && (
+              <ul className="space-y-1 rounded-lg bg-gray-50 border border-gray-100 px-4 py-3">
+                {RULES.map((rule) => {
+                  const ok = rule.test(newPassword);
+                  return (
+                    <li key={rule.label} className={`flex items-center gap-2 text-xs transition-colors ${ok ? 'text-green-600' : 'text-gray-400'}`}>
+                      <Check size={13} className={`shrink-0 ${ok ? 'text-green-500' : 'text-gray-300'}`} />
+                      {rule.label}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>

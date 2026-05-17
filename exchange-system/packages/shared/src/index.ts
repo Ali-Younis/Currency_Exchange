@@ -4,7 +4,7 @@
 // ─────────────────────────────────────────────
 
 export type Role = 'ADMIN' | 'TELLER';
-export type TransactionType = 'BUY' | 'SELL';
+export type TransactionType = 'BUY' | 'SELL' | 'CROSS';
 
 // ─── Auth ────────────────────────────────────
 

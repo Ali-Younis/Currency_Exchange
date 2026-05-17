@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
 import {
-  LayoutDashboard, ArrowDownCircle, ArrowUpCircle,
+  LayoutDashboard, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight,
   BookOpen, BarChart2, Settings, LogOut, Users, Coins, TrendingUp, Scale, Activity,
 } from 'lucide-react';
 
@@ -21,6 +21,7 @@ const navItems: NavItem[] = [
   { key: 'dashboard', href: '/dashboard', icon: <LayoutDashboard size={18} /> },
   { key: 'buy', href: '/buy', icon: <ArrowDownCircle size={18} /> },
   { key: 'sell', href: '/sell', icon: <ArrowUpCircle size={18} /> },
+  { key: 'cross', href: '/cross', icon: <ArrowLeftRight size={18} /> },
   { key: 'ledger', href: '/ledger', icon: <BookOpen size={18} /> },
   { key: 'reports', href: '/reports', icon: <BarChart2 size={18} /> },
   { key: 'balances', href: '/balances', icon: <Scale size={18} />, adminOnly: true },
@@ -47,14 +48,11 @@ export function Sidebar() {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/app-settings/logo_base64`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-    })
+    fetch('/api/v1/app-settings/public/logo')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (d?.value) setLogoB64(d.value); })
       .catch(() => {});
-  }, [user]);
+  }, []);
 
   function switchLocale(l: 'en' | 'ar') {
     document.cookie = `locale=${l}; path=/; max-age=${60 * 60 * 24 * 365}`;

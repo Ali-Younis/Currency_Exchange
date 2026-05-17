@@ -6,14 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import api from '@/lib/api';
 import { CurrencyDto, CreateCurrencyDto } from '@exchange/shared';
-
-function countryFlag(code: string | null | undefined): string {
-  if (!code || code.length !== 2) return '';
-  // Convert 2-letter ISO code to regional indicator emoji (flag)
-  return [...code.toUpperCase()].map((c) =>
-    String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65),
-  ).join('');
-}
+import { CurrencyLabel } from '@/components/CurrencyLabel';
 
 function CurrencyModal({
   onClose,
@@ -28,7 +21,6 @@ function CurrencyModal({
     nameAr: '',
     symbol: '',
     countryCode: '',
-    sortOrder: undefined,
   });
   const [error, setError] = useState('');
 
@@ -57,15 +49,6 @@ function CurrencyModal({
               />
             </div>
           ))}
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Sort Order</label>
-            <input
-              type="number"
-              value={form.sortOrder ?? ''}
-              onChange={(e) => setForm((p) => ({ ...p, sortOrder: e.target.value ? Number(e.target.value) : undefined }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]"
-            />
-          </div>
         </div>
         <div className="flex justify-end gap-3 mt-5">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
@@ -90,6 +73,33 @@ export default function CurrenciesPage() {
     queryKey: ['currencies-all'],
     queryFn: () => api.get('/currencies').then((r) => r.data),
   });
+
+  // Local ordered list (synced from query; re-sorted by sortOrder)
+  const orderedList = currencies
+    ? [...currencies].sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999))
+    : [];
+
+  const reorderMutation = useMutation({
+    mutationFn: ({ id, sortOrder }: { id: string; sortOrder: number }) =>
+      api.patch(`/currencies/${id}`, { sortOrder }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['currencies-all'] }),
+  });
+
+  function moveUp(index: number) {
+    if (index === 0) return;
+    const list = [...orderedList];
+    const a = list[index - 1];
+    const b = list[index];
+    const soA = a.sortOrder ?? index;
+    const soB = b.sortOrder ?? index + 1;
+    reorderMutation.mutate({ id: a.id, sortOrder: soB });
+    reorderMutation.mutate({ id: b.id, sortOrder: soA });
+  }
+
+  function moveDown(index: number) {
+    if (index >= orderedList.length - 1) return;
+    moveUp(index + 1);
+  }
 
   const toggleActive = useMutation({
     mutationFn: ({ id, active }: { id: string; active: boolean }) =>
@@ -127,25 +137,40 @@ export default function CurrenciesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 text-gray-500 text-xs uppercase border-b border-gray-200">
-                <th className="text-left px-5 py-3">Flag</th>
-                <th className="text-left px-5 py-3">Code</th>
-                <th className="text-left px-5 py-3">Name (EN)</th>
+                <th className="text-left px-5 py-3">Currency</th>
                 <th className="text-left px-5 py-3">Name (AR)</th>
                 <th className="text-left px-5 py-3">Symbol</th>
-                <th className="text-left px-5 py-3">Sort</th>
+                <th className="text-left px-5 py-3">Order</th>
                 <th className="text-left px-5 py-3">Status</th>
                 <th className="px-5 py-3" />
               </tr>
             </thead>
             <tbody>
-              {currencies?.map((c) => (
+              {orderedList.map((c, index) => (
                 <tr key={c.id} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="px-5 py-3 text-2xl">{countryFlag(c.countryCode)}</td>
-                  <td className="px-5 py-3 font-bold">{c.code}</td>
-                  <td className="px-5 py-3">{c.nameEn}</td>
+                  <td className="px-5 py-3"><CurrencyLabel code={c.code} nameEn={c.nameEn} countryCode={c.countryCode} flagSize="lg" /></td>
                   <td className="px-5 py-3 font-arabic">{c.nameAr}</td>
                   <td className="px-5 py-3">{c.symbol}</td>
-                  <td className="px-5 py-3 text-gray-400">{c.sortOrder ?? '—'}</td>
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => moveUp(index)}
+                        disabled={index === 0 || reorderMutation.isPending}
+                        className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 text-gray-500"
+                        title="Move up"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        onClick={() => moveDown(index)}
+                        disabled={index === orderedList.length - 1 || reorderMutation.isPending}
+                        className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 text-gray-500"
+                        title="Move down"
+                      >
+                        ▼
+                      </button>
+                    </div>
+                  </td>
                   <td className="px-5 py-3">
                     <span
                       className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${

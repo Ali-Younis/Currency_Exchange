@@ -19,8 +19,9 @@ enum Role {
 }
 
 enum TransactionType {
-  BUY  // Agency buys foreign currency FROM customer
-  SELL // Agency sells foreign currency TO customer
+  BUY   // Agency buys foreign currency FROM customer (currencyOut = GBP)
+  SELL  // Agency sells foreign currency TO customer  (currencyIn  = GBP)
+  CROSS // Non-GBP to non-GBP exchange via GBP bridge
 }
 
 // ─────────────────────────────────────────────
@@ -78,9 +79,12 @@ model Currency {
 // EXCHANGE RATES
 // Admin sets buy/sell rates for each currency per session/day.
 // Base currency is GBP (ISO 4217: 826).
-// buyRate  = agency's rate when buying foreign currency from customer (lower)
-// sellRate = agency's rate when selling foreign currency to customer (higher)
-// Spread = sellRate - buyRate = agency profit per unit
+// Convention: rates are expressed as "foreign units per 1 GBP".
+// buyRate  = agency's rate when BUYING foreign from customer (HIGHER — fewer GBP given)
+//            Formula: GBP out = foreign in  / buyRate
+// sellRate = agency's rate when SELLING foreign to customer (LOWER — less foreign given)
+//            Formula: foreign out = GBP in × sellRate
+// Invariant: buyRate > sellRate → spread = buyRate - sellRate > 0 = bureau profit
 // ─────────────────────────────────────────────
 
 model ExchangeRate {

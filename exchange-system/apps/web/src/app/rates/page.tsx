@@ -7,13 +7,7 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import api from '@/lib/api';
 import { CurrencyDto } from '@exchange/shared';
-
-function countryFlag(code: string | null | undefined): string {
-  if (!code || code.length !== 2) return '';
-  return [...code.toUpperCase()].map((c) =>
-    String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65),
-  ).join('');
-}
+import { CurrencyLabel } from '@/components/CurrencyLabel';
 
 interface RateRow {
   currency: CurrencyDto;
@@ -76,7 +70,7 @@ export default function RatesPage() {
               </tr>
             </thead>
             <tbody>
-              {rateData?.map(({ currency, rate }) => {
+              {rateData?.filter(({ currency }) => currency.code !== 'GBP').map(({ currency, rate }) => {
                 const edit = edits[currency.id];
                 const buyDisplay = edit?.buyRate ?? rate?.buyRate ?? '';
                 const sellDisplay = edit?.sellRate ?? rate?.sellRate ?? '';
@@ -86,9 +80,7 @@ export default function RatesPage() {
                 return (
                   <tr key={currency.id} className="border-t border-gray-100 hover:bg-gray-50">
                     <td className="px-5 py-3">
-                      <span className="me-1 text-lg">{countryFlag(currency.countryCode)}</span>
-                      <span className="font-bold">{currency.code}</span>
-                      <span className="text-gray-500 text-xs ms-2">({currency.nameEn})</span>
+                      <CurrencyLabel code={currency.code} nameEn={currency.nameEn} countryCode={currency.countryCode} />
                     </td>
                     <td className="px-5 py-3 text-right">
                       <input

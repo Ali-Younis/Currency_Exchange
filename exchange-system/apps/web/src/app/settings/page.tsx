@@ -17,7 +17,7 @@ function getCookie(name: string): string | undefined {
     ?.split('=')[1];
 }
 
-const API = process.env.NEXT_PUBLIC_API_URL;
+const API = '/api/v1';
 
 function authHeaders() {
   const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
@@ -45,6 +45,7 @@ export default function SettingsPage() {
   // Logo
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [logoSaving, setLogoSaving] = useState(false);
+  const [logoMsg, setLogoMsg] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
   // SMTP
@@ -86,16 +87,39 @@ export default function SettingsPage() {
   function handleLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setLogoPreview(reader.result as string);
-    reader.readAsDataURL(file);
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const maxW = 400;
+      const scale = img.width > maxW ? maxW / img.width : 1;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      setLogoPreview(canvas.toDataURL('image/jpeg', 0.8));
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
   }
 
   async function saveLogo() {
     if (!logoPreview) return;
     setLogoSaving(true);
-    await setSetting('logo_base64', logoPreview);
-    setLogoSaving(false);
+    setLogoMsg('');
+    try {
+      const r = await fetch(`${API}/app-settings/logo_base64`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify({ value: logoPreview }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      setLogoMsg('Logo saved successfully.');
+    } catch (err) {
+      setLogoMsg(`Failed to save logo: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setLogoSaving(false);
+    }
   }
 
   function removeLogo() {
@@ -183,6 +207,11 @@ export default function SettingsPage() {
               </button>
             )}
           </div>
+          {logoMsg && (
+            <p className={`text-xs mt-2 ${logoMsg.startsWith('Failed') ? 'text-red-500' : 'text-green-600'}`}>
+              {logoMsg}
+            </p>
+          )}
         </div>
 
         {/* SMTP */}
@@ -257,6 +286,7 @@ export default function SettingsPage() {
             <div className="flex gap-2"><dt className="text-gray-400 w-32">System</dt><dd>Exchange Manager</dd></div>
             <div className="flex gap-2"><dt className="text-gray-400 w-32">Version</dt><dd>1.0.0</dd></div>
             <div className="flex gap-2"><dt className="text-gray-400 w-32">Base Currency</dt><dd>GBP (£)</dd></div>
+            <div className="flex gap-2"><dt className="text-gray-400 w-32">Developer</dt><dd>AliTech</dd></div>
           </dl>
         </div>
       </div>

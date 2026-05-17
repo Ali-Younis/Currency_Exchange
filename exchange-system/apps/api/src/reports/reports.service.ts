@@ -165,13 +165,19 @@ export class ReportsService {
     startDate: string,
     endDate: string,
     groupBy: 'day' | 'week' | 'month' = 'day',
+    currencyId?: string,
   ) {
     const start = new Date(startDate);
     const end = new Date(endDate);
 
+    // Build where clause — optionally filter to a specific currency
+    const currencyFilter = currencyId
+      ? { OR: [{ currencyInId: currencyId }, { currencyOutId: currencyId }] }
+      : {};
+
     // Get all non-voided transactions in range
     const transactions = await this.prisma.transaction.findMany({
-      where: { isVoided: false, sessionDate: { gte: start, lte: end } },
+      where: { isVoided: false, sessionDate: { gte: start, lte: end }, ...currencyFilter },
       include: { currencyIn: true, currencyOut: true },
       orderBy: { sessionDate: 'asc' },
     });

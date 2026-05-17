@@ -7,6 +7,7 @@
     "dashboard": "لوحة التحكم",
     "buy": "شراء",
     "sell": "بيع",
+    "cross": "تحويل متقاطع",
     "ledger": "الحركات اليومية",
     "reports": "التقارير",
     "settings": "الإعدادات",
@@ -62,7 +63,9 @@
     "voidReason": "سبب الإلغاء",
     "confirm": "تأكيد العملية",
     "success": "تم تسجيل العملية بنجاح",
-    "receiptNumber": "رقم الإيصال"
+    "receiptNumber": "رقم الإيصال",
+    "buyTitle": "عمليات الشراء",
+    "sellTitle": "عمليات البيع"
   },
   "report": {
     "session": "تقرير الجلسة",

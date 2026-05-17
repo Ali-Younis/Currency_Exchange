@@ -12,6 +12,11 @@ import * as bcrypt from 'bcryptjs';
 import { Redis } from 'ioredis';
 import { authenticator } from 'otplib';
 import * as QRCode from 'qrcode';
+
+// RFC 6238 recommends accepting ±1 time-step (±30 s) to handle clock drift
+// between the authenticator app (phone) and the server. The default window:0
+// rejects valid codes the moment the phone clock is even slightly out of sync.
+authenticator.options = { window: 1 };
 import { AuthTokenPayload, AuthResponse } from '@exchange/shared';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto, PASSWORD_POLICY_REGEX } from './dto/change-password.dto';
@@ -32,16 +37,39 @@ export class AuthService {
   ) {}
 
   async login(dto: LoginDto, ip?: string, userAgent?: string) {
+    // Check if account is locked (too many failed attempts)
+    const isLocked = await this.redis.get(`locked:${dto.username}`);
+    if (isLocked) {
+      throw new UnauthorizedException(
+        'Account temporarily locked due to too many failed attempts. Try again in 15 minutes.',
+      );
+    }
+
     const user = await this.prisma.user.findUnique({ where: { username: dto.username } });
 
     if (!user || !user.isActive) {
+      // Increment failed attempts even for non-existent users (prevents username enumeration timing)
+      await this.redis.incr(`failedLogins:${dto.username}`);
+      await this.redis.expire(`failedLogins:${dto.username}`, 900);
       throw new UnauthorizedException('Invalid credentials');
     }
 
     const passwordValid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!passwordValid) {
+      const attempts = await this.redis.incr(`failedLogins:${dto.username}`);
+      await this.redis.expire(`failedLogins:${dto.username}`, 900);
+      if (attempts >= 5) {
+        await this.redis.setex(`locked:${dto.username}`, 900, '1');
+        await this.redis.del(`failedLogins:${dto.username}`);
+        throw new UnauthorizedException(
+          'Account locked for 15 minutes after 5 failed attempts.',
+        );
+      }
       throw new UnauthorizedException('Invalid credentials');
     }
+
+    // Successful login — clear any failed attempt counter
+    await this.redis.del(`failedLogins:${dto.username}`);
 
     await this.auditService.log({ userId: user.id, action: 'LOGIN', ipAddress: ip, userAgent });
 
@@ -129,8 +157,22 @@ export class AuthService {
   }
 
   async totpVerify(dto: TotpVerifyDto): Promise<AuthResponse> {
-    const userId = await this.validateShortLived(dto.preAuthToken, 'pre_auth');
-    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    // Validate token without consuming it yet — so wrong TOTP codes don't burn the token
+    let payload: { sub: string; purpose?: string };
+    try {
+      payload = this.jwtService.verify(dto.preAuthToken) as { sub: string; purpose?: string };
+    } catch {
+      throw new UnauthorizedException('Token invalid or expired');
+    }
+
+    if (payload.purpose !== 'pre_auth') {
+      throw new UnauthorizedException('Invalid token purpose');
+    }
+
+    const isBlacklisted = await this.redis.get(`bl:${dto.preAuthToken}`);
+    if (isBlacklisted) throw new UnauthorizedException('Token has been revoked');
+
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: payload.sub } });
 
     if (!user.totpSecret || !user.totpEnabled) {
       throw new BadRequestException('TOTP not enrolled for this user');
@@ -139,7 +181,12 @@ export class AuthService {
     const valid = authenticator.verify({ token: dto.code, secret: user.totpSecret });
     if (!valid) throw new UnauthorizedException('Invalid TOTP code');
 
-    await this.auditService.log({ userId, action: 'TOTP_VERIFIED' });
+    // Only consume the token after TOTP succeeds (one-time use preserved)
+    const decoded = this.jwtService.decode(dto.preAuthToken) as { exp?: number };
+    const ttl = decoded?.exp ? decoded.exp - Math.floor(Date.now() / 1000) : 300;
+    if (ttl > 0) await this.redis.setex(`bl:${dto.preAuthToken}`, ttl, '1');
+
+    await this.auditService.log({ userId: user.id, action: 'TOTP_VERIFIED' });
     return this.issueFullToken(user);
   }
 

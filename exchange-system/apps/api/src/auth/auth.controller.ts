@@ -1,4 +1,5 @@
 import { Controller, Post, Body, Req, UseGuards, HttpCode, HttpStatus, Get, Query } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -15,6 +16,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
   login(@Body() dto: LoginDto, @Req() req: Request) {
     return this.authService.login(dto, req.ip, req.headers['user-agent']);
   }
@@ -39,6 +41,7 @@ export class AuthController {
 
   @Post('totp/verify')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
   totpVerify(@Body() dto: TotpVerifyDto) {
     return this.authService.totpVerify(dto);
   }

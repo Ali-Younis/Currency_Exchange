@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { formatNumber } from '@/lib/format';
+import { CurrencyLabel } from '@/components/CurrencyLabel';
 
 interface CurrentBalanceRow {
   currencyId: string;
@@ -17,13 +18,6 @@ interface CurrentBalanceRow {
   totalBuys: string;
   totalSells: string;
   currentBalance: string;
-}
-
-function countryFlag(code: string | null | undefined): string {
-  if (!code || code.length !== 2) return '';
-  return [...code.toUpperCase()].map((c) =>
-    String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65),
-  ).join('');
 }
 
 function BalanceCell({ value }: { value: string }) {
@@ -68,7 +62,6 @@ export default function CurrentBalancesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 text-gray-500 text-xs uppercase border-b border-gray-200">
-                <th className="text-left px-5 py-3">Flag</th>
                 <th className="text-left px-5 py-3">Currency</th>
                 <th className="text-right px-5 py-3">Opening</th>
                 <th className="text-right px-5 py-3">+ Buys</th>
@@ -79,10 +72,8 @@ export default function CurrentBalancesPage() {
             <tbody>
               {data?.map((row) => (
                 <tr key={row.currencyId} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="px-5 py-3 text-2xl">{countryFlag(row.countryCode)}</td>
                   <td className="px-5 py-3">
-                    <span className="font-semibold text-gray-900">{row.currencyCode}</span>
-                    <span className="text-gray-400 ml-2 text-xs">({row.currencyNameEn})</span>
+                    <CurrencyLabel code={row.currencyCode} nameEn={row.currencyNameEn} countryCode={row.countryCode} />
                   </td>
                   <td className="px-5 py-3 text-right">
                     <BalanceCell value={row.openingBalance} />

@@ -49,8 +49,9 @@ export class ReportsController {
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
     @Query('groupBy') groupBy: 'day' | 'week' | 'month' = 'day',
+    @Query('currencyId') currencyId?: string,
   ) {
-    return this.svc.getVolumeReport(startDate ?? thirtyDaysAgo(), endDate ?? today(), groupBy);
+    return this.svc.getVolumeReport(startDate ?? thirtyDaysAgo(), endDate ?? today(), groupBy, currencyId);
   }
 
   /** Top customers by transaction volume */

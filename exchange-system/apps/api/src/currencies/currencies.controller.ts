@@ -42,4 +42,11 @@ export class CurrenciesController {
   deactivate(@Param('id', ParseUUIDPipe) id: string) {
     return this.svc.setActive(id, false);
   }
+
+  @Patch(':id')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() body: { sortOrder?: number }) {
+    return this.svc.update(id, body);
+  }
 }

@@ -37,12 +37,7 @@ const thirtyDaysAgo = () => {
   return d.toISOString().split('T')[0];
 };
 
-function countryFlag(code: string | null | undefined): string {
-  if (!code || code.length !== 2) return '';
-  return [...code.toUpperCase()].map((c) =>
-    String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65),
-  ).join('');
-}
+import { countryFlag } from '@/components/CurrencyLabel';
 
 type Tab = 'session' | 'profit' | 'volume' | 'customers' | 'rates' | 'audit' | 'eod';
 
@@ -53,11 +48,13 @@ function DateRangeBar({
   endDate,
   onStart,
   onEnd,
+  children,
 }: {
   startDate: string;
   endDate: string;
   onStart: (v: string) => void;
   onEnd: (v: string) => void;
+  children?: React.ReactNode;
 }) {
   const t = useTranslations('report');
   return (
@@ -83,6 +80,7 @@ function DateRangeBar({
           className="ms-2 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]"
         />
       </label>
+      {children}
     </div>
   );
 }
@@ -291,21 +289,6 @@ function ProfitTab() {
             />
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-6">
-            <h3 className="text-sm font-semibold text-gray-700 mb-4">Profit by Currency (GBP)</h3>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={data?.rows ?? []}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="currencyCode" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v: number) => `£${Number(v).toFixed(4)}`} />
-                <Legend />
-                <Bar dataKey="totalProfitGbp" name="Profit (GBP)" fill="#0a146e" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="totalVolumeGbp" name="Volume (GBP)" fill="#93c5fd" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
           <div className="flex justify-end mb-3">
             <button
               onClick={handleExportExcel}
@@ -376,13 +359,12 @@ function VolumeTab() {
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-3 mb-5">
-        <DateRangeBar
-          startDate={startDate}
-          endDate={endDate}
-          onStart={setStartDate}
-          onEnd={setEndDate}
-        />
+      <DateRangeBar
+        startDate={startDate}
+        endDate={endDate}
+        onStart={setStartDate}
+        onEnd={setEndDate}
+      >
         <select
           value={groupBy}
           onChange={(e) => setGroupBy(e.target.value as 'day' | 'week' | 'month')}
@@ -392,7 +374,7 @@ function VolumeTab() {
           <option value="week">Weekly</option>
           <option value="month">Monthly</option>
         </select>
-      </div>
+      </DateRangeBar>
 
       {isLoading ? (
         <Spinner />
@@ -408,11 +390,11 @@ function VolumeTab() {
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-6">
             <h3 className="text-sm font-semibold text-gray-700 mb-4">Transaction Volume (GBP)</h3>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={data?.trendPoints ?? []}>
+              <LineChart data={data?.trendPoints ?? []} margin={{ top: 5, right: 50, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                 <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
+                <YAxis yAxisId="right" orientation="right" allowDecimals={false} tick={{ fontSize: 11 }} />
                 <Tooltip />
                 <Legend />
                 <Line
@@ -440,10 +422,10 @@ function VolumeTab() {
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
             <h3 className="text-sm font-semibold text-gray-700 mb-4">Buys vs Sells</h3>
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={data?.trendPoints ?? []}>
+              <BarChart data={data?.trendPoints ?? []} margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                 <Tooltip />
                 <Legend />
                 <Bar dataKey="buys" name="Buys" fill="#22c55e" radius={[4, 4, 0, 0]} />
@@ -604,12 +586,22 @@ function RatesTab() {
               </option>
             ))}
         </select>
-        <DateRangeBar
-          startDate={startDate}
-          endDate={endDate}
-          onStart={setStartDate}
-          onEnd={setEndDate}
-        />
+        <label className="text-sm text-gray-600">
+          {t('startDate')}
+          <input
+            type="date" value={startDate} max={endDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="ms-2 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]"
+          />
+        </label>
+        <label className="text-sm text-gray-600">
+          {t('endDate')}
+          <input
+            type="date" value={endDate} min={startDate} max={today()}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="ms-2 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]"
+          />
+        </label>
       </div>
 
       {!currencyId ? (
@@ -622,7 +614,7 @@ function RatesTab() {
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-6">
               <h3 className="text-sm font-semibold text-gray-700 mb-4">Buy / Sell Rate Over Time</h3>
               <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={data.history}>
+                <LineChart data={data.history} margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="effectiveDate"
@@ -632,7 +624,7 @@ function RatesTab() {
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip
                     labelFormatter={(l) => new Date(l).toLocaleString()}
-                    formatter={(v: number) => v.toFixed(6)}
+                    formatter={(v) => Number(v).toFixed(6)}
                   />
                   <Legend />
                   <Line
@@ -725,13 +717,12 @@ function AuditTab() {
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-3 mb-5">
-        <DateRangeBar
-          startDate={startDate}
-          endDate={endDate}
-          onStart={setStartDate}
-          onEnd={setEndDate}
-        />
+      <DateRangeBar
+        startDate={startDate}
+        endDate={endDate}
+        onStart={setStartDate}
+        onEnd={(v) => { setEndDate(v); setPage(1); }}
+      >
         <input
           type="text"
           placeholder="Filter by action (e.g. LOGIN)"
@@ -739,7 +730,7 @@ function AuditTab() {
           onChange={(e) => { setAction(e.target.value); setPage(1); }}
           className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]"
         />
-      </div>
+      </DateRangeBar>
 
       {isLoading ? (
         <Spinner />

@@ -31,7 +31,7 @@ export class EmailService {
     to: string;
     receiptNumber: string;
     customerName: string;
-    type: 'BUY' | 'SELL';
+    type: 'BUY' | 'SELL' | 'CROSS';
     amountIn: string;
     currencyIn: string;
     amountOut: string;
@@ -46,21 +46,51 @@ export class EmailService {
     }
 
     const from = (await this.settings.get('smtp_from')) ?? 'noreply@exchange-manager.local';
+    const logoB64 = await this.settings.get('logo_base64');
+
+    const logoHtml = logoB64
+      ? `<img src="${logoB64}" alt="Company Logo" style="max-height:60px;max-width:220px;object-fit:contain;display:block;margin-bottom:16px">`
+      : `<div style="font-size:22px;font-weight:bold;color:#0a146e;margin-bottom:16px">Exchange Manager</div>`;
 
     const html = `
-      <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
-        <h2 style="color:#0a146e">Exchange Receipt</h2>
-        <p>Dear ${opts.customerName},</p>
-        <p>Thank you for your transaction. Here are the details:</p>
-        <table style="width:100%;border-collapse:collapse">
-          <tr><td style="padding:6px 0;color:#555">Receipt #</td><td style="font-weight:bold">${opts.receiptNumber}</td></tr>
-          <tr><td style="padding:6px 0;color:#555">Type</td><td>${opts.type === 'BUY' ? 'Buy (we bought your currency)' : 'Sell (we sold you currency)'}</td></tr>
-          <tr><td style="padding:6px 0;color:#555">You gave</td><td>${opts.amountIn} ${opts.currencyIn}</td></tr>
-          <tr><td style="padding:6px 0;color:#555">You received</td><td>${opts.amountOut} ${opts.currencyOut}</td></tr>
-          <tr><td style="padding:6px 0;color:#555">Rate applied</td><td>${opts.rate}</td></tr>
-          <tr><td style="padding:6px 0;color:#555">Date</td><td>${opts.date}</td></tr>
-        </table>
-        <p style="color:#888;font-size:12px;margin-top:24px">Exchange Manager — Currency Exchange System</p>
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+        <div style="background:#0a146e;padding:24px 28px">
+          ${logoHtml}
+          <div style="color:#fff;font-size:18px;font-weight:600">Transaction Receipt</div>
+        </div>
+        <div style="padding:24px 28px">
+          <p style="margin:0 0 16px;color:#374151">Dear <strong>${opts.customerName}</strong>,</p>
+          <p style="margin:0 0 20px;color:#374151">Thank you for your transaction. Here are the details:</p>
+          <table style="width:100%;border-collapse:collapse;font-size:14px">
+            <tr style="border-bottom:1px solid #f3f4f6">
+              <td style="padding:10px 0;color:#6b7280;width:45%">Receipt #</td>
+              <td style="padding:10px 0;font-weight:600;color:#111827">${opts.receiptNumber}</td>
+            </tr>
+            <tr style="border-bottom:1px solid #f3f4f6">
+              <td style="padding:10px 0;color:#6b7280">Transaction type</td>
+              <td style="padding:10px 0;color:#111827">${opts.type === 'BUY' ? 'Buy (customer sold us currency)' : opts.type === 'SELL' ? 'Sell (customer bought currency)' : 'Cross-currency exchange'}</td>
+            </tr>
+            <tr style="border-bottom:1px solid #f3f4f6">
+              <td style="padding:10px 0;color:#6b7280">You gave</td>
+              <td style="padding:10px 0;font-weight:600;color:#dc2626">${opts.amountIn} ${opts.currencyIn}</td>
+            </tr>
+            <tr style="border-bottom:1px solid #f3f4f6">
+              <td style="padding:10px 0;color:#6b7280">You received</td>
+              <td style="padding:10px 0;font-weight:600;color:#16a34a">${opts.amountOut} ${opts.currencyOut}</td>
+            </tr>
+            <tr style="border-bottom:1px solid #f3f4f6">
+              <td style="padding:10px 0;color:#6b7280">Rate applied</td>
+              <td style="padding:10px 0;color:#111827">${opts.rate}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 0;color:#6b7280">Date</td>
+              <td style="padding:10px 0;color:#111827">${opts.date}</td>
+            </tr>
+          </table>
+          <p style="color:#9ca3af;font-size:12px;margin-top:24px;border-top:1px solid #f3f4f6;padding-top:16px">
+            This is an automated receipt from Exchange Manager. Please keep it for your records.
+          </p>
+        </div>
       </div>
     `;
 

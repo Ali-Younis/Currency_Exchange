@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
@@ -21,101 +21,181 @@ export class TransactionsService {
   ) {}
 
   async create(dto: CreateTransactionDto, tellerId: string) {
-    // Determine valueInGbp — the GBP side of the transaction
-    // GBP is always one side; if neither currency is GBP, use amountIn * rateApplied
-    const gbpCurrency = await this.prisma.currency.findFirst({ where: { code: 'GBP' } });
-    let valueInGbp: Prisma.Decimal;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let createdTx: any = null;
+    let valueInGbpForAudit = new Prisma.Decimal(0);
 
-    if (gbpCurrency) {
-      if (dto.currencyInId === gbpCurrency.id) {
-        valueInGbp = new Prisma.Decimal(dto.amountIn);
-      } else if (dto.currencyOutId === gbpCurrency.id) {
-        valueInGbp = new Prisma.Decimal(dto.amountOut);
-      } else {
-        // Cross-currency: approximate via rate
-        valueInGbp = new Prisma.Decimal(dto.amountIn).div(new Prisma.Decimal(dto.rateApplied));
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      createdTx = await this.prisma.$transaction(
+        async (tx) => {
+          const gbpCurrency = await tx.currency.findFirst({ where: { code: 'GBP' } });
+
+          const isCross =
+            gbpCurrency !== null &&
+            dto.currencyInId !== gbpCurrency.id &&
+            dto.currencyOutId !== gbpCurrency.id;
+
+          let valueInGbp: Prisma.Decimal;
+          let buyRateSnapshot: Prisma.Decimal | null = null;
+          let sellRateSnapshot: Prisma.Decimal | null = null;
+          let spreadProfitGbp: Prisma.Decimal | null = null;
+
+          if (isCross) {
+            // ── Cross-currency: SAR → EUR via GBP bridge ─────────────────────────
+            const [inRate, outRate] = await Promise.all([
+              tx.exchangeRate.findFirst({
+                where: { currencyId: dto.currencyInId },
+                orderBy: { effectiveDate: 'desc' },
+              }),
+              tx.exchangeRate.findFirst({
+                where: { currencyId: dto.currencyOutId },
+                orderBy: { effectiveDate: 'desc' },
+              }),
+            ]);
+
+            if (inRate) {
+              valueInGbp = new Prisma.Decimal(dto.amountIn).div(new Prisma.Decimal(inRate.buyRate));
+              buyRateSnapshot = new Prisma.Decimal(inRate.buyRate);
+              sellRateSnapshot = outRate ? new Prisma.Decimal(outRate.sellRate) : null;
+              const spreadIn = new Prisma.Decimal(inRate.buyRate)
+                .minus(new Prisma.Decimal(inRate.sellRate))
+                .div(new Prisma.Decimal(inRate.buyRate));
+              let totalSpread = spreadIn;
+              if (outRate) {
+                const spreadOut = new Prisma.Decimal(outRate.buyRate)
+                  .minus(new Prisma.Decimal(outRate.sellRate))
+                  .div(new Prisma.Decimal(outRate.buyRate));
+                totalSpread = totalSpread.plus(spreadOut);
+              }
+              spreadProfitGbp = valueInGbp.mul(totalSpread);
+              if (spreadProfitGbp.lt(0)) spreadProfitGbp = new Prisma.Decimal(0);
+            } else {
+              valueInGbp = new Prisma.Decimal(dto.amountIn).div(new Prisma.Decimal(dto.rateApplied));
+            }
+          } else {
+            // ── Standard GBP-involved trade ──────────────────────────────────────
+            if (gbpCurrency && dto.currencyInId === gbpCurrency.id) {
+              valueInGbp = new Prisma.Decimal(dto.amountIn);
+            } else if (gbpCurrency && dto.currencyOutId === gbpCurrency.id) {
+              valueInGbp = new Prisma.Decimal(dto.amountOut);
+            } else {
+              valueInGbp = new Prisma.Decimal(0);
+            }
+
+            const foreignCurrencyId =
+              gbpCurrency && dto.currencyInId === gbpCurrency.id ? dto.currencyOutId : dto.currencyInId;
+
+            const latestRate = await tx.exchangeRate.findFirst({
+              where: { currencyId: foreignCurrencyId },
+              orderBy: { effectiveDate: 'desc' },
+            });
+
+            if (latestRate) {
+              buyRateSnapshot = new Prisma.Decimal(latestRate.buyRate);
+              sellRateSnapshot = new Prisma.Decimal(latestRate.sellRate);
+              if (buyRateSnapshot.gt(0)) {
+                const spread = buyRateSnapshot.minus(sellRateSnapshot);
+                spreadProfitGbp = valueInGbp.mul(spread).div(buyRateSnapshot);
+                if (spreadProfitGbp.lt(0)) spreadProfitGbp = new Prisma.Decimal(0);
+              }
+            }
+          }
+
+          valueInGbpForAudit = valueInGbp;
+
+          // ── Balance check: ensure we have enough of currencyOut ───────────────
+          const sessionDateObj = new Date(dto.sessionDate);
+          const [openingBalance, inflowAgg, outflowAgg, currencyOut] = await Promise.all([
+            tx.openingBalance.findFirst({
+              where: { currencyId: dto.currencyOutId, sessionDate: sessionDateObj },
+            }),
+            tx.transaction.aggregate({
+              where: { currencyInId: dto.currencyOutId, isVoided: false, sessionDate: sessionDateObj },
+              _sum: { amountIn: true },
+            }),
+            tx.transaction.aggregate({
+              where: { currencyOutId: dto.currencyOutId, isVoided: false, sessionDate: sessionDateObj },
+              _sum: { amountOut: true },
+            }),
+            tx.currency.findUnique({ where: { id: dto.currencyOutId } }),
+          ]);
+
+          const opening = new Prisma.Decimal(openingBalance?.amount?.toString() ?? '0');
+          const inflows = new Prisma.Decimal(inflowAgg._sum.amountIn?.toString() ?? '0');
+          const outflows = new Prisma.Decimal(outflowAgg._sum.amountOut?.toString() ?? '0');
+          const available = opening.plus(inflows).minus(outflows);
+
+          if (available.lt(new Prisma.Decimal(dto.amountOut))) {
+            throw new BadRequestException(
+              `Insufficient ${currencyOut?.code ?? 'currency'} balance: available ${available.toFixed(2)}, required ${dto.amountOut}`,
+            );
+          }
+
+          // ── Create transaction ────────────────────────────────────────────────
+          return tx.transaction.create({
+            data: {
+              receiptNumber: generateReceiptNumber(),
+              type: dto.type,
+              customerName: dto.customerName,
+              customerEmail: dto.customerEmail,
+              currencyInId: dto.currencyInId,
+              amountIn: dto.amountIn,
+              currencyOutId: dto.currencyOutId,
+              amountOut: dto.amountOut,
+              rateApplied: dto.rateApplied,
+              valueInGbp,
+              buyRateSnapshot,
+              sellRateSnapshot,
+              spreadProfitGbp,
+              notes: dto.notes,
+              tellerId,
+              sessionDate: sessionDateObj,
+            },
+            include: {
+              currencyIn: true,
+              currencyOut: true,
+              teller: { select: { id: true, fullName: true, username: true } },
+            },
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (e) {
+      // P2034: serialization failure from concurrent transactions — ask teller to retry
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2034') {
+        throw new ConflictException('Transaction conflict due to concurrent request, please try again.');
       }
-    } else {
-      valueInGbp = new Prisma.Decimal(0);
+      throw e;
     }
 
-    // ── Profit snapshot: fetch the current exchange rate for the foreign currency
-    const foreignCurrencyId =
-      gbpCurrency && dto.currencyInId === gbpCurrency.id ? dto.currencyOutId : dto.currencyInId;
-
-    const latestRate = await this.prisma.exchangeRate.findFirst({
-      where: { currencyId: foreignCurrencyId },
-      orderBy: { effectiveDate: 'desc' },
-    });
-
-    let buyRateSnapshot: Prisma.Decimal | null = null;
-    let sellRateSnapshot: Prisma.Decimal | null = null;
-    let spreadProfitGbp: Prisma.Decimal | null = null;
-
-    if (latestRate) {
-      buyRateSnapshot = new Prisma.Decimal(latestRate.buyRate);
-      sellRateSnapshot = new Prisma.Decimal(latestRate.sellRate);
-      // Spread profit = valueInGbp × (sellRate - buyRate) / buyRate
-      // sellRate > buyRate → agency earns money on every unit exchanged
-      if (buyRateSnapshot.gt(0)) {
-        const spread = sellRateSnapshot.minus(buyRateSnapshot);
-        spreadProfitGbp = valueInGbp.mul(spread).div(buyRateSnapshot);
-        // Clamp to zero — should never be negative, but guard against bad rate data
-        if (spreadProfitGbp.lt(0)) spreadProfitGbp = new Prisma.Decimal(0);
-      }
-    }
-
-    const tx = await this.prisma.transaction.create({
-      data: {
-        receiptNumber: generateReceiptNumber(),
-        type: dto.type,
-        customerName: dto.customerName,
-        customerEmail: dto.customerEmail,
-        currencyInId: dto.currencyInId,
-        amountIn: dto.amountIn,
-        currencyOutId: dto.currencyOutId,
-        amountOut: dto.amountOut,
-        rateApplied: dto.rateApplied,
-        valueInGbp,
-        buyRateSnapshot,
-        sellRateSnapshot,
-        spreadProfitGbp,
-        notes: dto.notes,
-        tellerId,
-        sessionDate: new Date(dto.sessionDate),
-      },
-      include: {
-        currencyIn: true,
-        currencyOut: true,
-        teller: { select: { id: true, fullName: true, username: true } },
-      },
-    });
+    const result = createdTx!;
 
     await this.audit.log({
       userId: tellerId,
       action: 'CREATE_TRANSACTION',
       entity: 'Transaction',
-      entityId: tx.id,
-      payload: { receiptNumber: tx.receiptNumber, type: tx.type, valueInGbp: valueInGbp.toString() },
+      entityId: result.id,
+      payload: { receiptNumber: result.receiptNumber, type: result.type, valueInGbp: valueInGbpForAudit.toString() },
     });
 
     // Fire-and-forget email receipt
     if (dto.customerEmail) {
       void this.email.sendReceiptEmail({
         to: dto.customerEmail,
-        receiptNumber: tx.receiptNumber,
+        receiptNumber: result.receiptNumber,
         customerName: dto.customerName,
         type: dto.type,
-        amountIn: tx.amountIn.toString(),
-        currencyIn: tx.currencyIn.code,
-        amountOut: tx.amountOut.toString(),
-        currencyOut: tx.currencyOut.code,
-        rate: tx.rateApplied.toString(),
+        amountIn: result.amountIn.toString(),
+        currencyIn: result.currencyIn.code,
+        amountOut: result.amountOut.toString(),
+        currencyOut: result.currencyOut.code,
+        rate: result.rateApplied.toString(),
         date: dto.sessionDate,
       });
     }
 
-    return tx;
+    return result;
   }
 
   async findAll(params: {

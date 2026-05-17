@@ -22,19 +22,22 @@ const DEFAULT_CURRENCIES = [
   { code: 'TRY', nameEn: 'Turkish Lira',          nameAr: 'الليرة التركية',    symbol: '₺',   countryCode: 'TR', sortOrder: 12 },
 ];
 
-// Base exchange rates: foreign units per 1 GBP
+// Base exchange rates: foreign units per 1 GBP.
+// Bureau convention: buyRate > sellRate — agency profits on every transaction.
+// BUY (agency buys foreign): customer gets GBP = foreign / buyRate  (higher buyRate → fewer GBP given)
+// SELL (agency sells foreign): customer gets foreign = GBP × sellRate (lower sellRate → less foreign given)
 const BASE_RATES: Record<string, { buy: number; sell: number }> = {
-  USD: { buy: 1.265, sell: 1.285 },
-  EUR: { buy: 1.155, sell: 1.170 },
-  JOD: { buy: 0.895, sell: 0.910 },
-  SAR: { buy: 4.720, sell: 4.800 },
-  AED: { buy: 4.600, sell: 4.680 },
-  CHF: { buy: 1.115, sell: 1.130 },
-  EGP: { buy: 60.00, sell: 62.00 },
-  BHD: { buy: 0.475, sell: 0.485 },
-  AUD: { buy: 1.950, sell: 1.980 },
-  CAD: { buy: 1.730, sell: 1.760 },
-  TRY: { buy: 38.50, sell: 40.00 },
+  USD: { buy: 1.285, sell: 1.265 },
+  EUR: { buy: 1.170, sell: 1.155 },
+  JOD: { buy: 0.910, sell: 0.895 },
+  SAR: { buy: 4.800, sell: 4.720 },
+  AED: { buy: 4.680, sell: 4.600 },
+  CHF: { buy: 1.130, sell: 1.115 },
+  EGP: { buy: 62.00, sell: 60.00 },
+  BHD: { buy: 0.485, sell: 0.475 },
+  AUD: { buy: 1.980, sell: 1.950 },
+  CAD: { buy: 1.760, sell: 1.730 },
+  TRY: { buy: 40.00, sell: 38.50 },
 };
 
 // Opening balance amounts in foreign currency units
@@ -91,12 +94,10 @@ async function main() {
     });
     console.log('✓ Admin user created (username: admin, password: admin1234)');
   } else {
-    const updates: Record<string, unknown> = {};
-    if (!adminExists.forcePasswordChange) updates.forcePasswordChange = true;
-    if (!adminExists.email) updates.email = 'admin@exchange.local';
-    if (Object.keys(updates).length > 0) {
-      await prisma.user.update({ where: { id: adminExists.id }, data: updates });
-      console.log('✓ Admin user updated:', JSON.stringify(updates));
+    // Only patch missing email — never reset forcePasswordChange (user may have already changed it)
+    if (!adminExists.email) {
+      await prisma.user.update({ where: { id: adminExists.id }, data: { email: 'admin@exchange.local' } });
+      console.log('✓ Admin user: added missing email');
     } else {
       console.log('✓ Admin user already up-to-date');
     }
