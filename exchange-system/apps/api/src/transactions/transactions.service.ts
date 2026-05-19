@@ -6,10 +6,18 @@ import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { VoidTransactionDto } from './dto/void-transaction.dto';
 import { Prisma } from '@prisma/client';
 
-function generateReceiptNumber(): string {
-  const year = new Date().getFullYear();
-  const rand = Math.floor(Math.random() * 900000) + 100000;
-  return `TXN-${year}-${rand}`;
+async function generateReceiptNumber(
+  tx: { transaction: { count: (args: { where: object }) => Promise<number> } },
+  type: string,
+  sessionDate: string,
+): Promise<string> {
+  const typeCode = type === 'BUY' ? 'B' : type === 'SELL' ? 'S' : 'C';
+  const date = new Date(sessionDate);
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  const count = await tx.transaction.count({ where: { sessionDate: date } });
+  return `TXN-${typeCode}-${yyyy}-${mm}-${dd}-${count + 1}`;
 }
 
 @Injectable()
@@ -135,7 +143,7 @@ export class TransactionsService {
           // ── Create transaction ────────────────────────────────────────────────
           return tx.transaction.create({
             data: {
-              receiptNumber: generateReceiptNumber(),
+              receiptNumber: await generateReceiptNumber(tx, dto.type, dto.sessionDate),
               type: dto.type,
               customerName: dto.customerName,
               customerEmail: dto.customerEmail,

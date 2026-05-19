@@ -54,6 +54,8 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
     ports:
       - "3001:3001"
+    volumes:
+      - backups_data:/app/backups
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3001/api/v1/health || exit 1"]
       interval: 30s
@@ -96,3 +98,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  backups_data:

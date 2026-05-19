@@ -55,6 +55,19 @@ export default function SettingsPage() {
   const [testEmail, setTestEmail] = useState('');
   const [testMsg, setTestMsg] = useState('');
 
+  // Company details
+  const [company, setCompany] = useState({ name: '', address: '', email: '', phone: '' });
+  const [companySaving, setCompanySaving] = useState(false);
+  const [companyMsg, setCompanyMsg] = useState('');
+
+  // Backup
+  const [backupConfig, setBackupConfig] = useState({ directory: '/app/backups', autoTime: '02:00', autoEnabled: false });
+  const [backupConfigSaving, setBackupConfigSaving] = useState(false);
+  const [backupMsg, setBackupMsg] = useState('');
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [restoreMsg, setRestoreMsg] = useState('');
+  const [restoring, setRestoring] = useState(false);
+
   useEffect(() => {
     const stored = getCookie('locale') as Locale | undefined;
     if (stored === 'en' || stored === 'ar') setLocale(stored);
@@ -76,6 +89,20 @@ export default function SettingsPage() {
         from: from ?? '',
       }));
     });
+    // Company details
+    Promise.all([
+      getSetting('company_name'),
+      getSetting('company_address'),
+      getSetting('company_email'),
+      getSetting('company_phone'),
+    ]).then(([name, address, email, phone]) => {
+      setCompany({ name: name ?? '', address: address ?? '', email: email ?? '', phone: phone ?? '' });
+    });
+    // Backup config
+    fetch(`${API}/backup/config`, { headers: authHeaders() })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d) setBackupConfig({ directory: d.directory, autoTime: d.autoTime, autoEnabled: d.autoEnabled }); })
+      .catch(() => {});
   }, []);
 
   function handleLocaleChange(l: Locale) {
@@ -149,6 +176,72 @@ export default function SettingsPage() {
       body: JSON.stringify({ to: testEmail }),
     });
     setTestMsg(r.ok ? 'Test email sent!' : 'Failed to send test email.');
+  }
+
+  async function saveCompany() {
+    setCompanySaving(true);
+    setCompanyMsg('');
+    await Promise.all([
+      setSetting('company_name', company.name),
+      setSetting('company_address', company.address),
+      setSetting('company_email', company.email),
+      setSetting('company_phone', company.phone),
+    ]);
+    setCompanyMsg('Company details saved.');
+    setCompanySaving(false);
+  }
+
+  async function downloadBackup() {
+    setBackupMsg('');
+    try {
+      const r = await fetch(`${API}/backup/export`, { headers: authHeaders() });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const blob = await r.blob();
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const name = `RMX2_Exchange_Backup_${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}.json`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = name; a.click();
+      URL.revokeObjectURL(url);
+      setBackupMsg('Backup downloaded successfully.');
+    } catch (err) {
+      setBackupMsg(`Backup failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }
+
+  async function restoreBackup() {
+    if (!restoreFile) return;
+    setRestoring(true);
+    setRestoreMsg('');
+    try {
+      const text = await restoreFile.text();
+      const backup = JSON.parse(text);
+      const r = await fetch(`${API}/backup/import`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ backup }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      setRestoreMsg('✓ Restore completed successfully. Please refresh the page.');
+    } catch (err) {
+      setRestoreMsg(`Restore failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setRestoring(false);
+    }
+  }
+
+  async function saveBackupConfig() {
+    setBackupConfigSaving(true);
+    try {
+      await fetch(`${API}/backup/config`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify(backupConfig),
+      });
+      setBackupMsg('Auto-backup settings saved.');
+    } catch { setBackupMsg('Failed to save backup settings.'); }
+    setBackupConfigSaving(false);
   }
 
   return (
@@ -279,10 +372,135 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Company Details */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">Company Details</h3>
+          <p className="text-xs text-gray-400 mb-4">Shown at the top of PDF receipts.</p>
+          <div className="space-y-3">
+            {[
+              { label: 'Company Name', key: 'name' as const, placeholder: 'RMX2 Exchange' },
+              { label: 'Address', key: 'address' as const, placeholder: '123 High Street, London, UK' },
+              { label: 'Email', key: 'email' as const, placeholder: 'info@rmx2.com' },
+              { label: 'Phone', key: 'phone' as const, placeholder: '+44 20 1234 5678' },
+            ].map(({ label, key, placeholder }) => (
+              <div key={key}>
+                <label className="block text-xs text-gray-500 mb-1">{label}</label>
+                <input
+                  type="text"
+                  value={company[key]}
+                  onChange={(e) => setCompany((c) => ({ ...c, [key]: e.target.value }))}
+                  placeholder={placeholder}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]"
+                />
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={saveCompany}
+            disabled={companySaving}
+            className="mt-4 px-5 py-2 text-sm bg-[#0a146e] text-white rounded-lg hover:bg-[#070e57] disabled:opacity-50"
+          >
+            {companySaving ? 'Saving…' : 'Save Company Details'}
+          </button>
+          {companyMsg && <p className="text-xs mt-2 text-green-600">{companyMsg}</p>}
+        </div>
+
+        {/* Backup & Restore */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">Backup &amp; Restore</h3>
+
+          {/* Manual backup */}
+          <div className="mb-5">
+            <p className="text-sm font-medium text-gray-700 mb-1">Manual Backup</p>
+            <p className="text-xs text-gray-400 mb-3">Download a full JSON backup of all system data.</p>
+            <button
+              onClick={downloadBackup}
+              className="px-5 py-2 text-sm bg-[#0a146e] text-white rounded-lg hover:bg-[#070e57]"
+            >
+              ⬇ Download Backup
+            </button>
+          </div>
+
+          {/* Restore */}
+          <div className="border-t border-gray-100 pt-5 mb-5">
+            <p className="text-sm font-medium text-gray-700 mb-1">Restore from Backup</p>
+            <p className="text-xs text-amber-600 mb-3">⚠ This will overwrite ALL current data. Ensure you have a recent backup first.</p>
+            <div className="flex items-center gap-3">
+              <input
+                type="file"
+                accept=".json"
+                onChange={(e) => setRestoreFile(e.target.files?.[0] ?? null)}
+                className="text-sm text-gray-600"
+              />
+              <button
+                onClick={restoreBackup}
+                disabled={!restoreFile || restoring}
+                className="px-5 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
+              >
+                {restoring ? 'Restoring…' : 'Restore'}
+              </button>
+            </div>
+            {restoreMsg && (
+              <p className={`text-xs mt-2 ${restoreMsg.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>
+                {restoreMsg}
+              </p>
+            )}
+          </div>
+
+          {/* Auto-backup */}
+          <div className="border-t border-gray-100 pt-5">
+            <p className="text-sm font-medium text-gray-700 mb-3">Automated Daily Backup</p>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <label className="text-xs text-gray-500 w-36">Enable Auto-Backup</label>
+                <button
+                  onClick={() => setBackupConfig((c) => ({ ...c, autoEnabled: !c.autoEnabled }))}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${backupConfig.autoEnabled ? 'bg-[#0a146e]' : 'bg-gray-200'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${backupConfig.autoEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Backup Time (daily)</label>
+                <input
+                  type="time"
+                  value={backupConfig.autoTime}
+                  onChange={(e) => setBackupConfig((c) => ({ ...c, autoTime: e.target.value }))}
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Save Directory (server path)</label>
+                <input
+                  type="text"
+                  value={backupConfig.directory}
+                  onChange={(e) => setBackupConfig((c) => ({ ...c, directory: e.target.value }))}
+                  placeholder="/app/backups"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Files saved as: <span className="font-mono">RMX2_Exchange_Backup_YYYY-MM-DD_HH-MM-SS.json</span>
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={saveBackupConfig}
+              disabled={backupConfigSaving}
+              className="mt-4 px-5 py-2 text-sm bg-[#0a146e] text-white rounded-lg hover:bg-[#070e57] disabled:opacity-50"
+            >
+              {backupConfigSaving ? 'Saving…' : 'Save Auto-Backup Settings'}
+            </button>
+            {backupMsg && (
+              <p className={`text-xs mt-2 ${backupMsg.includes('failed') || backupMsg.includes('Failed') ? 'text-red-500' : 'text-green-600'}`}>
+                {backupMsg}
+              </p>
+            )}
+          </div>
+        </div>
+
         {/* About */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <h3 className="text-sm font-semibold text-gray-700 mb-2">About</h3>
-          <dl className="text-sm space-y-1 text-gray-600">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">About</h3>          <dl className="text-sm space-y-1 text-gray-600">
             <div className="flex gap-2"><dt className="text-gray-400 w-32">System</dt><dd>Exchange Manager</dd></div>
             <div className="flex gap-2"><dt className="text-gray-400 w-32">Version</dt><dd>1.0.0</dd></div>
             <div className="flex gap-2"><dt className="text-gray-400 w-32">Base Currency</dt><dd>GBP (£)</dd></div>

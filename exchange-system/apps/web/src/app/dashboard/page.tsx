@@ -11,6 +11,19 @@ import { SessionReport, EndOfDayReport, VolumeReport } from '@exchange/shared';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
+/** Compute padded [min, max] domain so charts don't clip or crowd data */
+function chartDomain(values: number[], forceZeroMin = false, padPct = 0.15): [number, number] {
+  const nums = values.filter((n) => isFinite(n));
+  if (!nums.length) return [0, 10];
+  const min = Math.min(...nums);
+  const max = Math.max(...nums);
+  const range = max - min > 0 ? max - min : max > 0 ? max : 1;
+  const pad = range * padPct;
+  const lower = forceZeroMin ? 0 : Math.max(0, min - pad);
+  const upper = max + pad;
+  return [lower, upper];
+}
+
 const todayStr = () => new Date().toISOString().split('T')[0];
 
 function daysAgo(n: number) {
@@ -91,6 +104,11 @@ export default function DashboardPage() {
     [prevVolumeData],
   );
 
+  const volDomain = useMemo(
+    () => chartDomain((volumeData?.trendPoints ?? []).map((p) => parseFloat(p.volumeGbp)), true),
+    [volumeData],
+  );
+
   const trendPct = prevTotal > 0 ? ((currentTotal - prevTotal) / prevTotal) * 100 : null;
 
   const totalBuysGbp =
@@ -107,15 +125,7 @@ export default function DashboardPage() {
 
   return (
     <AppShell>
-      <PageHeader
-        title={t('nav.dashboard')}
-        subtitle={new Date().toLocaleDateString(undefined, {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        })}
-      />
+      <PageHeader title={t('nav.dashboard')} />
 
       {isLoading ? (
         <div className="flex justify-center py-20">
@@ -208,6 +218,8 @@ export default function DashboardPage() {
                   />
                   <YAxis
                     tick={{ fontSize: 11 }}
+                    domain={volDomain}
+                    tickCount={6}
                     tickFormatter={(v) => `£${Number(v).toLocaleString()}`}
                     width={90}
                   />

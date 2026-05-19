@@ -43,6 +43,19 @@ export class AppSettingsController {
     return { key: 'logo_base64', value: value ?? null };
   }
 
+  /** Unauthenticated — used in PDF receipts rendered in browser */
+  @Get('public/company')
+  @Public()
+  async getPublicCompany() {
+    const [name, address, email, phone] = await Promise.all([
+      this.svc.get('company_name'),
+      this.svc.get('company_address'),
+      this.svc.get('company_email'),
+      this.svc.get('company_phone'),
+    ]);
+    return { name, address, email, phone };
+  }
+
   @Get(':key')
   async get(@Param('key') key: string) {
     const value = await this.svc.get(key);

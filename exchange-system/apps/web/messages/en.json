@@ -65,7 +65,8 @@
     "success": "Transaction recorded successfully",
     "receiptNumber": "Receipt #",
     "buyTitle": "Buy Transactions",
-    "sellTitle": "Sell Transactions"
+    "sellTitle": "Sell Transactions",
+    "crossTitle": "Cross Transactions"
   },
   "report": {
     "session": "Session Report",

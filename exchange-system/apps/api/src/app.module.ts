@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
@@ -12,12 +13,14 @@ import { BalancesModule } from './balances/balances.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { ReportsModule } from './reports/reports.module';
 import { AppSettingsModule } from './app-settings/app-settings.module';
+import { BackupModule } from './backup/backup.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     // Rate limiting: 100 req/min globally; auth endpoints override to 5/min
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60000, limit: 100 }]),
     PrismaModule,
@@ -30,6 +33,7 @@ import { AppService } from './app.service';
     TransactionsModule,
     ReportsModule,
     AppSettingsModule,
+    BackupModule,
   ],
   controllers: [AppController],
   providers: [

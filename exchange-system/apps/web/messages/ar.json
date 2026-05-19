@@ -65,7 +65,8 @@
     "success": "تم تسجيل العملية بنجاح",
     "receiptNumber": "رقم الإيصال",
     "buyTitle": "عمليات الشراء",
-    "sellTitle": "عمليات البيع"
+    "sellTitle": "عمليات البيع",
+    "crossTitle": "عمليات التحويل"
   },
   "report": {
     "session": "تقرير الجلسة",

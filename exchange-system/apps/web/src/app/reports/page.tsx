@@ -27,6 +27,27 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import type { CurrencyDto } from '@exchange/shared';
+import { useMemo } from 'react';
+
+/** Compute a padded [min, max] domain from an array of numbers so charts never
+ *  clip data at the top or force an awkward 0-baseline when data floats high. */
+function chartDomain(values: number[], forceZeroMin = false, padPct = 0.15): [number, number] {
+  const nums = values.filter((n) => isFinite(n));
+  if (!nums.length) return [0, 10];
+  const min = Math.min(...nums);
+  const max = Math.max(...nums);
+  const range = max - min > 0 ? max - min : max > 0 ? max : 1;
+  const pad = range * padPct;
+  const lower = forceZeroMin ? 0 : Math.max(0, min - pad);
+  const upper = max + pad;
+  return [lower, upper];
+}
+
+function niceTickCount(domain: [number, number], maxTicks = 6): number {
+  const range = domain[1] - domain[0];
+  if (range <= 0) return maxTicks;
+  return Math.min(maxTicks, Math.ceil(range) + 1);
+}
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -357,6 +378,31 @@ function VolumeTab() {
         .then((r) => r.data),
   });
 
+  const volDomain = useMemo(
+    () => chartDomain((data?.trendPoints ?? []).map((p) => parseFloat(p.volumeGbp)), true),
+    [data],
+  );
+  const cntDomain = useMemo(
+    () => chartDomain((data?.trendPoints ?? []).map((p) => Number(p.count)), true),
+    [data],
+  );
+  const buysDomain = useMemo(
+    () => chartDomain([
+      ...(data?.trendPoints ?? []).map((p) => Number(p.buys)),
+      ...(data?.trendPoints ?? []).map((p) => Number(p.sells)),
+    ], true),
+    [data],
+  );
+
+  const dateTickFmt = (v: string) => {
+    const d = new Date(v + 'T12:00:00');
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  };
+  const dateLabelFmt = (v: string) => {
+    const d = new Date(v + 'T12:00:00');
+    return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
   return (
     <div>
       <DateRangeBar
@@ -390,31 +436,40 @@ function VolumeTab() {
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-6">
             <h3 className="text-sm font-semibold text-gray-700 mb-4">Transaction Volume (GBP)</h3>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={data?.trendPoints ?? []} margin={{ top: 5, right: 50, left: 10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
-                <YAxis yAxisId="right" orientation="right" allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Legend />
-                <Line
+              <LineChart data={data?.trendPoints ?? []} margin={{ top: 10, right: 60, left: 10, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 11 }}
+                  tickFormatter={dateTickFmt}
+                  minTickGap={40}
+                />
+                <YAxis
                   yAxisId="left"
-                  type="monotone"
-                  dataKey="volumeGbp"
-                  name="Volume (GBP)"
-                  stroke="#0a146e"
-                  strokeWidth={2}
-                  dot={false}
+                  tick={{ fontSize: 11 }}
+                  domain={volDomain}
+                  tickCount={6}
+                  tickFormatter={(v) => `£${Number(v).toLocaleString()}`}
+                  width={80}
                 />
-                <Line
+                <YAxis
                   yAxisId="right"
-                  type="monotone"
-                  dataKey="count"
-                  name="# Transactions"
-                  stroke="#f59e0b"
-                  strokeWidth={2}
-                  dot={false}
+                  orientation="right"
+                  tick={{ fontSize: 11 }}
+                  domain={cntDomain}
+                  tickCount={niceTickCount(cntDomain)}
+                  allowDecimals={false}
+                  width={40}
                 />
+                <Tooltip
+                  labelFormatter={dateLabelFmt}
+                  formatter={(v: number, name: string) =>
+                    name === 'Volume (GBP)' ? [`£${Number(v).toLocaleString()}`, name] : [v, name]
+                  }
+                />
+                <Legend />
+                <Line yAxisId="left" type="monotone" dataKey="volumeGbp" name="Volume (GBP)" stroke="#0a146e" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                <Line yAxisId="right" type="monotone" dataKey="count" name="# Transactions" stroke="#f59e0b" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -422,11 +477,22 @@ function VolumeTab() {
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
             <h3 className="text-sm font-semibold text-gray-700 mb-4">Buys vs Sells</h3>
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={data?.trendPoints ?? []} margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip />
+              <BarChart data={data?.trendPoints ?? []} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 11 }}
+                  tickFormatter={dateTickFmt}
+                  minTickGap={40}
+                />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  domain={buysDomain}
+                  tickCount={6}
+                  allowDecimals={false}
+                  width={40}
+                />
+                <Tooltip labelFormatter={dateLabelFmt} />
                 <Legend />
                 <Bar dataKey="buys" name="Buys" fill="#22c55e" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="sells" name="Sells" fill="#ef4444" radius={[4, 4, 0, 0]} />

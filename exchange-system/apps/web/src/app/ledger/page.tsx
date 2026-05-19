@@ -37,6 +37,7 @@ export default function LedgerPage() {
   const transactions = data?.data ?? [];
   const buys = transactions.filter((t) => t.type === 'BUY');
   const sells = transactions.filter((t) => t.type === 'SELL');
+  const crosses = transactions.filter((t) => t.type === 'CROSS');
 
   return (
     <AppShell>
@@ -72,6 +73,14 @@ export default function LedgerPage() {
             title={t('transaction.sellTitle')}
             transactions={sells}
             colorClass="text-red-600"
+            isAdmin={isAdmin}
+            onVoid={(id) => setVoidId(id)}
+          />
+          {/* Cross */}
+          <LedgerTable
+            title={t('transaction.crossTitle')}
+            transactions={crosses}
+            colorClass="text-purple-600"
             isAdmin={isAdmin}
             onVoid={(id) => setVoidId(id)}
           />
@@ -159,7 +168,7 @@ function LedgerTable({
                 <td className="px-4 py-3 text-right text-gray-600 font-mono">{tx.rateApplied}</td>
                 <td className="px-4 py-3 text-right font-semibold">£{tx.valueInGbp}</td>
                 <td className="px-4 py-3 text-gray-400 text-xs">
-                  {new Date(tx.createdAt).toLocaleTimeString()}
+                  {new Date(tx.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
                 </td>
                 {isAdmin && (
                   <td className="px-4 py-3">

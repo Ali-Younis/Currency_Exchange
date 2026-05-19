@@ -8,7 +8,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { useAuth } from '@/contexts/AuthContext';
 import api from '@/lib/api';
 import { CurrencyDto, TransactionDto } from '@exchange/shared';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface RateRow {
   currency: CurrencyDto;
@@ -34,33 +34,87 @@ interface FormData {
   notes: string;
 }
 
-async function downloadReceiptPdf(tx: TransactionDto, type: 'BUY' | 'SELL' | 'CROSS') {
+interface CommInfo {
+  type1: 'fixed' | 'pct';
+  value1: number;        // raw input value
+  deducted1Gbp: number;  // GBP deducted (leg 1, or BUY/SELL)
+  // CROSS leg 2:
+  type2?: 'fixed' | 'pct';
+  value2?: number;
+  deducted2OutCcy?: number; // commission in output currency
+  inCode?: string;          // e.g. USD (for CROSS label)
+  outCode?: string;         // e.g. EUR (for CROSS label)
+}
+
+function calcComm(type: 'fixed' | 'pct', val: string | number, baseGbp: number): number {
+  const v = typeof val === 'string' ? parseFloat(val) : val;
+  if (!v || v <= 0) return 0;
+  return type === 'fixed' ? v : (baseGbp * v / 100);
+}
+
+async function downloadReceiptPdf(tx: TransactionDto, type: 'BUY' | 'SELL' | 'CROSS', commInfo?: CommInfo | null) {
   const { default: jsPDF } = await import('jspdf');
   const { default: autoTable } = await import('jspdf-autotable');
 
-  // Fetch logo (if saved)
+  // Fetch logo and company details in parallel
   let logoB64: string | null = null;
+  let company: { name?: string | null; address?: string | null; email?: string | null; phone?: string | null } = {};
   try {
-    const r = await fetch('/api/v1/app-settings/public/logo');
-    if (r.ok) { const d = await r.json(); if (d?.value) logoB64 = d.value; }
+    const [logoRes, companyRes] = await Promise.all([
+      fetch('/api/v1/app-settings/public/logo'),
+      fetch('/api/v1/app-settings/public/company'),
+    ]);
+    if (logoRes.ok) { const d = await logoRes.json(); if (d?.value) logoB64 = d.value; }
+    if (companyRes.ok) { company = await companyRes.json(); }
   } catch { /* ignore */ }
 
+  const pageW = 148; // A5 width in mm
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5' });
 
   let cursorY = 14;
 
+  // ── Centered logo ──────────────────────────────────────────────────────────
   if (logoB64) {
     try {
       const fmt = logoB64.startsWith('data:image/png') ? 'PNG' : 'JPEG';
-      doc.addImage(logoB64, fmt, 14, cursorY, 40, 16);
-      cursorY += 22;
+      const logoW = 50;
+      const logoH = 20;
+      doc.addImage(logoB64, fmt, (pageW - logoW) / 2, cursorY, logoW, logoH);
+      cursorY += logoH + 4;
     } catch { /* skip */ }
   }
 
+  // ── Company details (centered) ─────────────────────────────────────────────
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  if (company.name) {
+    doc.text(company.name, pageW / 2, cursorY, { align: 'center' });
+    cursorY += 5;
+  }
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  if (company.address) {
+    doc.text(company.address, pageW / 2, cursorY, { align: 'center' });
+    cursorY += 4;
+  }
+  const contactLine = [company.email, company.phone].filter(Boolean).join('  |  ');
+  if (contactLine) {
+    doc.text(contactLine, pageW / 2, cursorY, { align: 'center' });
+    cursorY += 4;
+  }
+
+  // ── Divider ────────────────────────────────────────────────────────────────
+  if (company.name || company.address || contactLine) {
+    doc.setDrawColor(200, 200, 200);
+    doc.line(14, cursorY, pageW - 14, cursorY);
+    cursorY += 6;
+  }
+
+  // ── Title ──────────────────────────────────────────────────────────────────
   doc.setFontSize(18);
   doc.setFont('helvetica', 'bold');
-  doc.text('Exchange Receipt', 14, cursorY + 6);
-  cursorY += 14;
+  doc.text('Exchange Receipt', pageW / 2, cursorY, { align: 'center' });
+  cursorY += 10;
 
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
@@ -68,21 +122,67 @@ async function downloadReceiptPdf(tx: TransactionDto, type: 'BUY' | 'SELL' | 'CR
   cursorY += 6;
   doc.text(`Date: ${tx.sessionDate?.toString().split('T')[0] ?? new Date().toISOString().split('T')[0]}`, 14, cursorY);
   cursorY += 6;
-  doc.text(`Type: ${type}`, 14, cursorY);
+  const txTime = tx.createdAt
+    ? new Date(tx.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+    : new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  doc.text(`Time: ${txTime}`, 14, cursorY);
+  cursorY += 6;
+  const typeLabel = type === 'BUY' ? 'Buy' : type === 'SELL' ? 'Sell' : 'Cross';
+  doc.text(`Type: ${typeLabel}`, 14, cursorY);
   cursorY += 6;
   doc.text(`Customer: ${tx.customerName}`, 14, cursorY);
   cursorY += 10;
+
+  const txIn  = (tx as unknown as { currencyIn?: { code: string } }).currencyIn;
+  const txOut = (tx as unknown as { currencyOut?: { code: string } }).currencyOut;
+  const inCode  = txIn?.code  ?? '';
+  const outCode = txOut?.code ?? '';
+
+  function commLabel(cType: 'fixed' | 'pct', val: number): string {
+    return cType === 'fixed' ? `Fixed £${val.toFixed(2)}` : `${val}%`;
+  }
+
+  const commRows: string[][] = [];
+  if (commInfo && commInfo.deducted1Gbp > 0) {
+    if (type === 'CROSS') {
+      commRows.push([
+        `1st Commission (${commInfo.inCode ?? inCode}→GBP)`,
+        'GBP',
+        `${commInfo.deducted1Gbp.toFixed(2)} (${commLabel(commInfo.type1, commInfo.value1)})`,
+      ]);
+    } else {
+      commRows.push([
+        '1st Commission',
+        'GBP',
+        `${commInfo.deducted1Gbp.toFixed(2)} (${commLabel(commInfo.type1, commInfo.value1)})`,
+      ]);
+    }
+  }
+  if (commInfo && type === 'CROSS' && commInfo.deducted2OutCcy != null && commInfo.deducted2OutCcy > 0) {
+    commRows.push([
+      `2nd Commission (GBP→${commInfo.outCode ?? outCode})`,
+      commInfo.outCode ?? outCode,
+      `${commInfo.deducted2OutCcy.toFixed(2)} (${commLabel(commInfo.type2!, commInfo.value2!)})`,
+    ]);
+  }
 
   autoTable(doc, {
     startY: cursorY,
     head: [['', 'Currency', 'Amount']],
     body: [
-      ['Given', (tx as unknown as { currencyIn?: { code: string } }).currencyIn?.code ?? '', tx.amountIn?.toString() ?? ''],
-      ['Received', (tx as unknown as { currencyOut?: { code: string } }).currencyOut?.code ?? '', tx.amountOut?.toString() ?? ''],
-      ['Rate applied', '', tx.rateApplied?.toString() ?? ''],
+      ['Given',         inCode,  tx.amountIn?.toString()  ?? ''],
+      ['Received',      outCode, tx.amountOut?.toString() ?? ''],
+      ...commRows,
+      ['Rate applied',  '',      tx.rateApplied?.toString() ?? ''],
     ],
-    styles: { fontSize: 10 },
+    styles: { fontSize: 10, overflow: 'linebreak', cellPadding: 3 },
     headStyles: { fillColor: [10, 20, 110] },
+    columnStyles: {
+      0: { cellWidth: 70 },
+      1: { cellWidth: 22, halign: 'center' },
+      2: { cellWidth: 'auto' },
+    },
+    tableWidth: 'auto',
   });
 
   doc.save(`receipt-${tx.receiptNumber}.pdf`);
@@ -93,6 +193,8 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [lastReceipt, setLastReceipt] = useState<TransactionDto | null>(null);
+  const [lastCommInfo, setLastCommInfo] = useState<CommInfo | null>(null);
+  const pendingCommRef = useRef<CommInfo | null>(null);
   const [crossInfo, setCrossInfo] = useState<CrossInfo | null>(null);
   // Used to force the GBP-lock useEffect to re-run after form reset
   const [resetCount, setResetCount] = useState(0);
@@ -203,12 +305,6 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
     const rate = parseFloat(rateApplied);
     if (isNaN(amt) || isNaN(rate) || rate <= 0 || !gbp) return;
 
-    function calcComm(type: 'fixed' | 'pct', val: string, baseGbp: number): number {
-      const v = parseFloat(val) || 0;
-      if (v <= 0) return 0;
-      return type === 'fixed' ? v : (baseGbp * v / 100);
-    }
-
     let amtOut: number;
     if (currencyOutId === gbp.id) {
       // BUY: amountOut(GBP) = amountIn(foreign) / buyRate - commission
@@ -243,6 +339,8 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
         .then((r) => r.data),
     onSuccess: (tx) => {
       setLastReceipt(tx);
+      setLastCommInfo(pendingCommRef.current);
+      pendingCommRef.current = null;
       reset();
       setResetCount((n) => n + 1); // triggers GBP re-lock useEffect
       setCommValue('0');
@@ -268,7 +366,7 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
             </div>
           </div>
           <button
-            onClick={() => downloadReceiptPdf(lastReceipt, type)}
+            onClick={() => downloadReceiptPdf(lastReceipt, type, lastCommInfo)}
             className="text-xs border border-green-600 text-green-700 rounded px-3 py-1.5 hover:bg-green-100"
           >
             {t('receipt')} (PDF)
@@ -277,7 +375,43 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
       )}
 
       <form
-        onSubmit={handleSubmit((data) => mutation.mutate(data))}
+        onSubmit={handleSubmit((data) => {
+          // Snapshot commission before state is reset on success
+          const gbp = currencies?.find((c) => c.code === 'GBP');
+          const amt = parseFloat(data.amountIn);
+          const rate = parseFloat(data.rateApplied);
+          if (gbp && !isNaN(amt) && !isNaN(rate) && rate > 0) {
+            if (data.currencyOutId === gbp.id) {
+              // BUY
+              const grossGbp = amt / rate;
+              const d1 = calcComm(commType, commValue, grossGbp);
+              pendingCommRef.current = { type1: commType, value1: parseFloat(commValue) || 0, deducted1Gbp: d1 };
+            } else if (data.currencyInId === gbp.id) {
+              // SELL
+              const d1 = calcComm(commType, commValue, amt);
+              pendingCommRef.current = { type1: commType, value1: parseFloat(commValue) || 0, deducted1Gbp: d1 };
+            } else if (crossInfo) {
+              // CROSS
+              const inBuy = parseFloat(crossInfo.inBuyRate);
+              const outSell = parseFloat(crossInfo.outSellRate);
+              const intermediateGbp = amt / inBuy;
+              const d1 = calcComm(commType, commValue, intermediateGbp);
+              const netGbp = Math.max(0, intermediateGbp - d1);
+              const d2Gbp = calcComm(commType2, commValue2, netGbp);
+              const d2OutCcy = d2Gbp * outSell;
+              pendingCommRef.current = {
+                type1: commType, value1: parseFloat(commValue) || 0, deducted1Gbp: d1,
+                type2: commType2, value2: parseFloat(commValue2) || 0, deducted2OutCcy: d2OutCcy,
+                inCode: crossInfo.inCode, outCode: crossInfo.outCode,
+              };
+            } else {
+              pendingCommRef.current = null;
+            }
+          } else {
+            pendingCommRef.current = null;
+          }
+          mutation.mutate(data);
+        })}
         className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4"
       >
         {/* Customer */}
@@ -529,7 +663,11 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
 
         {mutation.isError && (
           <div className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-2.5">
-            Failed to record transaction. Please try again.
+            {(() => {
+              const err = mutation.error as { response?: { data?: { message?: string } } } | null;
+              const msg = err?.response?.data?.message;
+              return msg ? msg : 'Failed to record transaction. Please try again.';
+            })()}
           </div>
         )}
 
