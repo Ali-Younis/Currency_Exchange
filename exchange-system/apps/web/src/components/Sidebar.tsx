@@ -6,8 +6,8 @@ import { useTranslations } from 'next-intl';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
 import {
-  LayoutDashboard, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight,
-  BookOpen, BarChart2, Settings, LogOut, Users, Coins, TrendingUp, Scale, Activity,
+  ClipboardList, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight,
+  BookOpen, BarChart2, Settings, LogOut, Users, Coins, TrendingUp, Landmark, Activity, Info,
 } from 'lucide-react';
 
 interface NavItem {
@@ -18,17 +18,18 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { key: 'dashboard', href: '/dashboard', icon: <LayoutDashboard size={18} /> },
+  { key: 'dashboard', href: '/dashboard', icon: <ClipboardList size={18} /> },
   { key: 'buy', href: '/buy', icon: <ArrowDownCircle size={18} /> },
   { key: 'sell', href: '/sell', icon: <ArrowUpCircle size={18} /> },
   { key: 'cross', href: '/cross', icon: <ArrowLeftRight size={18} /> },
   { key: 'ledger', href: '/ledger', icon: <BookOpen size={18} /> },
   { key: 'reports', href: '/reports', icon: <BarChart2 size={18} /> },
-  { key: 'balances', href: '/balances', icon: <Scale size={18} />, adminOnly: true },
+  { key: 'balances', href: '/balances', icon: <Landmark size={18} />, adminOnly: true },
   { key: 'currentBalances', href: '/current-balances', icon: <Activity size={18} />, adminOnly: true },
   { key: 'rates', href: '/rates', icon: <TrendingUp size={18} />, adminOnly: true },
   { key: 'currencies', href: '/currencies', icon: <Coins size={18} />, adminOnly: true },
   { key: 'users', href: '/users', icon: <Users size={18} />, adminOnly: true },
+  { key: 'about', href: '/about', icon: <Info size={18} /> },
 ];
 
 export function Sidebar() {

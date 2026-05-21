@@ -4,7 +4,7 @@
     "tagline": "Currency Exchange Management System"
   },
   "nav": {
-    "dashboard": "Dashboard",
+    "dashboard": "Today's Transactions",
     "buy": "Buy",
     "sell": "Sell",
     "cross": "Cross-Currency",
@@ -14,9 +14,10 @@
     "users": "Users",
     "currencies": "Currencies",
     "rates": "Exchange Rates",
-    "balances": "Opening Balances",
+    "balances": "Initial Balances",
     "currentBalances": "Current Balances",
-    "logout": "Logout"
+    "logout": "Logout",
+    "about": "About"
   },
   "auth": {
     "login": "Login",
@@ -107,7 +108,7 @@
     "voidedTxns": "Voided Txns"
   },
   "balance": {
-    "title": "Opening Balances",
+    "title": "Initial Balances",
     "set": "Set Balance",
     "amount": "Amount",
     "saved": "Balances saved",
@@ -167,6 +168,7 @@
     "todaySells": "Today's Sells",
     "activeCurrencies": "Active Currencies",
     "todayProfit": "Today's Est. Profit",
-    "volumeTrend": "7-Day Volume Trend (GBP)"
+    "volumeTrend": "7-Day Volume Trend (GBP)",
+    "exportExcel": "Export to Excel"
   }
 }

@@ -156,6 +156,8 @@ export class TransactionsService {
               buyRateSnapshot,
               sellRateSnapshot,
               spreadProfitGbp,
+              commission1: dto.commission1 ?? null,
+              commission2: dto.commission2 ?? null,
               notes: dto.notes,
               tellerId,
               sessionDate: sessionDateObj,
@@ -163,7 +165,7 @@ export class TransactionsService {
             include: {
               currencyIn: true,
               currencyOut: true,
-              teller: { select: { id: true, fullName: true, username: true } },
+              teller: { select: { id: true, fullName: true, receiptAlias: true, username: true } },
             },
           });
         },
@@ -200,6 +202,12 @@ export class TransactionsService {
         currencyOut: result.currencyOut.code,
         rate: result.rateApplied.toString(),
         date: dto.sessionDate,
+        time: result.createdAt.toISOString(),
+        commission1: result.commission1?.toString() ?? undefined,
+        commission2: result.commission2?.toString() ?? undefined,
+        inRate: result.buyRateSnapshot?.toString() ?? undefined,
+        outRate: result.sellRateSnapshot?.toString() ?? undefined,
+        cashierName: result.teller ? (result.teller.receiptAlias || result.teller.fullName) : undefined,
       });
     }
 
@@ -225,7 +233,7 @@ export class TransactionsService {
         include: {
           currencyIn: true,
           currencyOut: true,
-          teller: { select: { id: true, fullName: true } },
+          teller: { select: { id: true, fullName: true, receiptAlias: true } },
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,

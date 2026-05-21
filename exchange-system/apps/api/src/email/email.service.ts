@@ -38,6 +38,12 @@ export class EmailService {
     currencyOut: string;
     rate: string;
     date: string;
+    time?: string;
+    commission1?: string;
+    commission2?: string;
+    inRate?: string;
+    outRate?: string;
+    cashierName?: string;
   }): Promise<void> {
     const transport = await this.createTransport();
     if (!transport) {
@@ -47,28 +53,127 @@ export class EmailService {
 
     const from = (await this.settings.get('smtp_from')) ?? 'noreply@exchange-manager.local';
     const logoB64 = await this.settings.get('logo_base64');
+    const companyName = (await this.settings.get('company_name')) ?? 'Exchange Manager';
+    const companyAddress = (await this.settings.get('company_address')) ?? '';
+    const companyPhone = (await this.settings.get('company_phone')) ?? '';
+    const companyEmail = (await this.settings.get('company_email')) ?? '';
+    const greetingTemplate = (await this.settings.get('receipt_greeting')) ?? 'Dear {customerName},\n\nThank you for your transaction. Please find below the details of your exchange. If you have any questions, please do not hesitate to contact us.';
+    const closingTemplate = (await this.settings.get('receipt_closing')) ?? 'Thank you for choosing {companyName} for your currency exchange needs. We appreciate your business and look forward to serving you again.';
 
-    const logoHtml = logoB64
-      ? `<img src="${logoB64}" alt="Company Logo" style="max-height:60px;max-width:220px;object-fit:contain;display:block;margin-bottom:16px">`
-      : `<div style="font-size:22px;font-weight:bold;color:#0a146e;margin-bottom:16px">Exchange Manager</div>`;
+    const substitute = (template: string) =>
+      template
+        .replace(/\{customerName\}/gi, opts.customerName)
+        .replace(/\{companyName\}/gi, companyName);
+
+    const greeting = substitute(greetingTemplate);
+    const closing = substitute(closingTemplate);
+
+    // Format date/time display
+    let dateTimeDisplay = opts.date;
+    if (opts.time) {
+      try {
+        const timeObj = new Date(opts.time);
+        const hh = String(timeObj.getUTCHours()).padStart(2, '0');
+        const mm2 = String(timeObj.getUTCMinutes()).padStart(2, '0');
+        dateTimeDisplay = `${opts.date} at ${hh}:${mm2} UTC`;
+      } catch {
+        dateTimeDisplay = opts.date;
+      }
+    }
+
+    // Strip data URI prefix to get raw base64 for CID attachment (required for Gmail)
+    let logoBase64Raw: string | null = null;
+    let logoMime = 'image/png';
+    if (logoB64) {
+      const match = logoB64.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+      if (match) {
+        logoMime = match[1];
+        logoBase64Raw = match[2];
+      } else {
+        logoBase64Raw = logoB64;
+      }
+    }
+
+    const logoHtml = logoBase64Raw
+      ? `<img src="cid:logo@exchange" alt="${companyName}" style="max-height:70px;max-width:240px;object-fit:contain;display:block;margin:0 auto 10px">`
+      : `<div style="font-size:24px;font-weight:bold;color:#0a146e;text-align:center;margin-bottom:10px">${companyName}</div>`;
+
+    const companyDetailsLines = [
+      `<div style="font-size:15px;font-weight:700;color:#111827;text-align:center;margin-bottom:4px">${companyName}</div>`,
+      companyAddress ? `<div style="font-size:13px;color:#6b7280;text-align:center">${companyAddress}</div>` : '',
+      (companyPhone || companyEmail)
+        ? `<div style="font-size:13px;color:#6b7280;text-align:center">${[companyPhone, companyEmail].filter(Boolean).join(' &nbsp;|&nbsp; ')}</div>`
+        : '',
+    ].filter(Boolean).join('');
+
+    // Build rate rows depending on transaction type
+    const rateRows = opts.type === 'CROSS'
+      ? `<tr style="border-bottom:1px solid #f3f4f6">
+           <td style="padding:10px 0;color:#6b7280;width:45%">Rate 1 (${opts.currencyIn} &rarr; GBP)</td>
+           <td style="padding:10px 0;color:#111827">${opts.inRate ?? opts.rate}</td>
+         </tr>
+         <tr style="border-bottom:1px solid #f3f4f6">
+           <td style="padding:10px 0;color:#6b7280">Rate 2 (GBP &rarr; ${opts.currencyOut})</td>
+           <td style="padding:10px 0;color:#111827">${opts.outRate ?? ''}</td>
+         </tr>`
+      : opts.type === 'BUY'
+      ? `<tr style="border-bottom:1px solid #f3f4f6">
+           <td style="padding:10px 0;color:#6b7280;width:45%">Rate (${opts.currencyIn} &rarr; GBP)</td>
+           <td style="padding:10px 0;color:#111827">${opts.rate}</td>
+         </tr>`
+      : `<tr style="border-bottom:1px solid #f3f4f6">
+           <td style="padding:10px 0;color:#6b7280;width:45%">Rate (GBP &rarr; ${opts.currencyOut})</td>
+           <td style="padding:10px 0;color:#111827">${opts.rate}</td>
+         </tr>`;
+
+    // Commission rows
+    const commissionRows = (() => {
+      if (!opts.commission1 && !opts.commission2) return '';
+      if (opts.type === 'CROSS' && opts.commission2) {
+        return `<tr style="border-bottom:1px solid #f3f4f6">
+           <td style="padding:10px 0;color:#6b7280">Commission 1</td>
+           <td style="padding:10px 0;color:#111827">${opts.commission1 ?? '0.00'} GBP</td>
+         </tr>
+         <tr style="border-bottom:1px solid #f3f4f6">
+           <td style="padding:10px 0;color:#6b7280">Commission 2</td>
+           <td style="padding:10px 0;color:#111827">${opts.commission2} GBP</td>
+         </tr>`;
+      }
+      if (opts.commission1 && parseFloat(opts.commission1) > 0) {
+        return `<tr style="border-bottom:1px solid #f3f4f6">
+           <td style="padding:10px 0;color:#6b7280">Commission</td>
+           <td style="padding:10px 0;color:#111827">${opts.commission1} GBP</td>
+         </tr>`;
+      }
+      return '';
+    })();
+
+    // Format greeting/closing preserving line breaks
+    const greetingHtml = greeting.replace(/\n/g, '<br>');
+    const closingHtml = closing.replace(/\n/g, '<br>');
 
     const html = `
       <div style="font-family:sans-serif;max-width:520px;margin:0 auto;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
-        <div style="background:#0a146e;padding:24px 28px">
+        <div style="background:#ffffff;padding:28px 28px 16px;text-align:center">
           ${logoHtml}
-          <div style="color:#fff;font-size:18px;font-weight:600">Transaction Receipt</div>
+          ${companyDetailsLines}
         </div>
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:0">
         <div style="padding:24px 28px">
-          <p style="margin:0 0 16px;color:#374151">Dear <strong>${opts.customerName}</strong>,</p>
-          <p style="margin:0 0 20px;color:#374151">Thank you for your transaction. Here are the details:</p>
+          <p style="margin:0 0 20px;color:#374151;line-height:1.6">${greetingHtml}</p>
           <table style="width:100%;border-collapse:collapse;font-size:14px">
             <tr style="border-bottom:1px solid #f3f4f6">
               <td style="padding:10px 0;color:#6b7280;width:45%">Receipt #</td>
               <td style="padding:10px 0;font-weight:600;color:#111827">${opts.receiptNumber}</td>
             </tr>
+            ${opts.cashierName ? `
             <tr style="border-bottom:1px solid #f3f4f6">
-              <td style="padding:10px 0;color:#6b7280">Transaction type</td>
-              <td style="padding:10px 0;color:#111827">${opts.type === 'BUY' ? 'Buy (customer sold us currency)' : opts.type === 'SELL' ? 'Sell (customer bought currency)' : 'Cross-currency exchange'}</td>
+              <td style="padding:10px 0;color:#6b7280;width:45%">Cashier</td>
+              <td style="padding:10px 0;color:#111827">${opts.cashierName}</td>
+            </tr>` : ''}
+            <tr style="border-bottom:1px solid #f3f4f6">
+              <td style="padding:10px 0;color:#6b7280">Date &amp; Time</td>
+              <td style="padding:10px 0;color:#111827">${dateTimeDisplay}</td>
             </tr>
             <tr style="border-bottom:1px solid #f3f4f6">
               <td style="padding:10px 0;color:#6b7280">You gave</td>
@@ -78,24 +183,27 @@ export class EmailService {
               <td style="padding:10px 0;color:#6b7280">You received</td>
               <td style="padding:10px 0;font-weight:600;color:#16a34a">${opts.amountOut} ${opts.currencyOut}</td>
             </tr>
-            <tr style="border-bottom:1px solid #f3f4f6">
-              <td style="padding:10px 0;color:#6b7280">Rate applied</td>
-              <td style="padding:10px 0;color:#111827">${opts.rate}</td>
-            </tr>
-            <tr>
-              <td style="padding:10px 0;color:#6b7280">Date</td>
-              <td style="padding:10px 0;color:#111827">${opts.date}</td>
-            </tr>
+            ${rateRows}
+            ${commissionRows}
           </table>
-          <p style="color:#9ca3af;font-size:12px;margin-top:24px;border-top:1px solid #f3f4f6;padding-top:16px">
-            This is an automated receipt from Exchange Manager. Please keep it for your records.
+          <p style="margin:24px 0 0;color:#374151;line-height:1.6">${closingHtml}</p>
+          <p style="color:#9ca3af;font-size:12px;margin-top:20px;border-top:1px solid #f3f4f6;padding-top:16px">
+            This is an automated receipt. Please keep it for your records.
           </p>
         </div>
       </div>
     `;
 
     try {
-      await transport.sendMail({ from, to: opts.to, subject: `Receipt ${opts.receiptNumber}`, html });
+      await transport.sendMail({
+        from,
+        to: opts.to,
+        subject: `Currency Exchange Receipt — ${opts.receiptNumber}`,
+        html,
+        attachments: logoBase64Raw
+          ? [{ filename: 'logo.png', content: logoBase64Raw, encoding: 'base64' as const, cid: 'logo@exchange', contentType: logoMime }]
+          : [],
+      });
       this.logger.log(`Receipt email sent to ${opts.to}`);
     } catch (err) {
       this.logger.error(`Failed to send receipt email: ${String(err)}`);

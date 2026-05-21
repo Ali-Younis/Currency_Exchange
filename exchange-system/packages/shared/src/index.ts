@@ -57,6 +57,7 @@ export interface UserSummary {
   id: string;
   username: string;
   fullName: string;
+  receiptAlias?: string | null;
   email?: string | null;
   role: Role;
   isActive: boolean;
@@ -69,6 +70,7 @@ export interface CreateUserDto {
   username: string;
   password: string;
   fullName: string;
+  receiptAlias?: string;
   role: Role;
   email: string;
 }
@@ -145,6 +147,10 @@ export interface TransactionDto {
   amountOut: string;
   rateApplied: string;
   valueInGbp: string;
+  buyRateSnapshot?: string | null;
+  sellRateSnapshot?: string | null;
+  commission1?: string | null;
+  commission2?: string | null;
   notes?: string;
   isVoided: boolean;
   tellerId: string;
@@ -164,6 +170,8 @@ export interface CreateTransactionDto {
   rateApplied: string;
   notes?: string;
   sessionDate: string;
+  commission1?: string;
+  commission2?: string;
 }
 
 export interface VoidTransactionDto {

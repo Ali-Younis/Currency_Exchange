@@ -286,7 +286,7 @@ export class AuthService {
   }
 
   private issueFullToken(user: {
-    id: string; username: string; role: string; fullName: string;
+    id: string; username: string; role: string; fullName: string; receiptAlias?: string | null;
     isActive: boolean; permissions: unknown; totpEnabled: boolean; forcePasswordChange: boolean;
   }): AuthResponse {
     const payload: AuthTokenPayload = {
@@ -303,6 +303,7 @@ export class AuthService {
         id: user.id,
         username: user.username,
         fullName: user.fullName,
+        receiptAlias: user.receiptAlias ?? null,
         role: user.role as AuthTokenPayload['role'],
         isActive: user.isActive,
         permissions: Array.isArray(user.permissions) ? (user.permissions as string[]) : [],

@@ -56,6 +56,17 @@ export class AppSettingsController {
     return { name, address, email, phone };
   }
 
+  /** Unauthenticated — used in PDF receipts rendered in browser */
+  @Get('public/receipt')
+  @Public()
+  async getPublicReceipt() {
+    const [greeting, closing] = await Promise.all([
+      this.svc.get('receipt_greeting'),
+      this.svc.get('receipt_closing'),
+    ]);
+    return { greeting, closing };
+  }
+
   @Get(':key')
   async get(@Param('key') key: string) {
     const value = await this.svc.get(key);

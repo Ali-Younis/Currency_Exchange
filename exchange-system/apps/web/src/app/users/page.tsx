@@ -13,6 +13,7 @@ function UserModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
   const [form, setForm] = useState<CreateUserDto & { password: string }>({  username: '',
     password: '',
     fullName: '',
+    receiptAlias: '',
     role: 'TELLER',
     email: '',
   });
@@ -41,6 +42,12 @@ function UserModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Full Name</label>
             <input value={form.fullName} onChange={(e) => setForm((p) => ({ ...p, fullName: e.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Receipt Alias <span className="text-gray-400 normal-case">(shown on receipts — defaults to Full Name)</span></label>
+            <input value={form.receiptAlias ?? ''} onChange={(e) => setForm((p) => ({ ...p, receiptAlias: e.target.value }))}
+              placeholder={form.fullName || 'e.g. Ali Y.'}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]" />
           </div>
           <div>

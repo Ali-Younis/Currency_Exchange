@@ -11,10 +11,18 @@ export class BalancesService {
   ) {}
 
   async getByDate(sessionDate: string) {
-    return this.prisma.openingBalance.findMany({
-      where: { sessionDate: new Date(sessionDate) },
+    const date = new Date(sessionDate);
+    const all = await this.prisma.openingBalance.findMany({
+      where: { sessionDate: { lte: date } },
       include: { currency: true },
-      orderBy: { currency: { sortOrder: 'asc' } },
+      orderBy: [{ currency: { sortOrder: 'asc' } }, { sessionDate: 'desc' }],
+    });
+    // Keep only the latest entry per currency (carry-forward behaviour)
+    const seen = new Set<string>();
+    return all.filter((b) => {
+      if (seen.has(b.currencyId)) return false;
+      seen.add(b.currencyId);
+      return true;
     });
   }
 
@@ -58,10 +66,15 @@ export class BalancesService {
     });
 
     const openingBals = await this.prisma.openingBalance.findMany({
-      where: { sessionDate: dateKey },
+      where: { sessionDate: { lte: dateKey } },
+      orderBy: { sessionDate: 'desc' },
     });
 
-    const openingMap = Object.fromEntries(openingBals.map((b) => [b.currencyId, b.amount]));
+    // Build map with the latest balance per currency (carry-forward behaviour)
+    const openingMap: Record<string, (typeof openingBals)[0]['amount']> = {};
+    for (const b of openingBals) {
+      if (!(b.currencyId in openingMap)) openingMap[b.currencyId] = b.amount;
+    }
 
     const txns = await this.prisma.transaction.findMany({
       where: { sessionDate: dateKey, isVoided: false },
@@ -70,10 +83,10 @@ export class BalancesService {
     return currencies.map((c) => {
       const opening = openingMap[c.id] ?? 0;
       const buys = txns
-        .filter((t) => t.type === 'BUY' && t.currencyInId === c.id)
+        .filter((t) => t.currencyInId === c.id)
         .reduce((s, t) => s + parseFloat(t.amountIn.toString()), 0);
       const sells = txns
-        .filter((t) => t.type === 'SELL' && t.currencyOutId === c.id)
+        .filter((t) => t.currencyOutId === c.id)
         .reduce((s, t) => s + parseFloat(t.amountOut.toString()), 0);
       const current = parseFloat(opening.toString()) + buys - sells;
 
@@ -90,5 +103,9 @@ export class BalancesService {
         currentBalance: current.toFixed(2),
       };
     });
+  }
+
+  async getHistory() {
+    return this.audit.queryByEntity('OpeningBalance', 'SET_OPENING_BALANCE', 30);
   }
 }

@@ -31,7 +31,6 @@ interface FormData {
   currencyOutId: string;
   amountOut: string;
   rateApplied: string;
-  notes: string;
 }
 
 interface CommInfo {
@@ -52,28 +51,70 @@ function calcComm(type: 'fixed' | 'pct', val: string | number, baseGbp: number):
   return type === 'fixed' ? v : (baseGbp * v / 100);
 }
 
-async function downloadReceiptPdf(tx: TransactionDto, type: 'BUY' | 'SELL' | 'CROSS', commInfo?: CommInfo | null) {
+async function downloadReceiptPdf(
+  tx: TransactionDto,
+  type: 'BUY' | 'SELL' | 'CROSS',
+  commInfo?: CommInfo | null,
+  options?: { returnBuffer?: boolean; cashierName?: string },
+) {
   const { default: jsPDF } = await import('jspdf');
-  const { default: autoTable } = await import('jspdf-autotable');
 
-  // Fetch logo and company details in parallel
+  // ── Load Unicode font (DejaVu Sans) for → support ────────────────────────
+  // Served from Next.js public/; falls back to helvetica + ASCII arrow.
+  let fontFamily = 'helvetica';
+  let arrowChar = '->';
+  let fontB64: string | null = null;
+  try {
+    const res = await fetch('/DejaVuSans.ttf');
+    if (res.ok) {
+      const buf = await res.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      const CHUNK = 8192;
+      const parts: string[] = [];
+      for (let i = 0; i < bytes.length; i += CHUNK) {
+        parts.push(String.fromCharCode(...bytes.subarray(i, i + CHUNK)));
+      }
+      fontB64 = btoa(parts.join(''));
+      fontFamily = 'DejaVu';
+      arrowChar = '\u2192'; // →
+    }
+  } catch { /* stay with helvetica + '->' */ }
+
+  // Fetch logo, company details, and receipt messages in parallel
   let logoB64: string | null = null;
   let company: { name?: string | null; address?: string | null; email?: string | null; phone?: string | null } = {};
+  let receiptMessages: { greeting?: string | null; closing?: string | null } = {};
   try {
-    const [logoRes, companyRes] = await Promise.all([
+    const [logoRes, companyRes, receiptRes] = await Promise.all([
       fetch('/api/v1/app-settings/public/logo'),
       fetch('/api/v1/app-settings/public/company'),
+      fetch('/api/v1/app-settings/public/receipt'),
     ]);
     if (logoRes.ok) { const d = await logoRes.json(); if (d?.value) logoB64 = d.value; }
     if (companyRes.ok) { company = await companyRes.json(); }
+    if (receiptRes.ok) { receiptMessages = await receiptRes.json(); }
   } catch { /* ignore */ }
 
+  const substitute = (template: string) =>
+    template
+      .replace(/\{customerName\}/gi, tx.customerName)
+      .replace(/\{companyName\}/gi, company.name ?? 'Exchange Manager');
+
   const pageW = 148; // A5 width in mm
+  const marginL = 14;
+  const marginR = pageW - 14;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5' });
+
+  // Register the Unicode font now that doc exists
+  if (fontB64) {
+    doc.addFileToVFS('DejaVuSans.ttf', fontB64);
+    doc.addFont('DejaVuSans.ttf', 'DejaVu', 'normal');
+    doc.addFont('DejaVuSans.ttf', 'DejaVu', 'bold');
+  }
 
   let cursorY = 14;
 
-  // ── Centered logo ──────────────────────────────────────────────────────────
+  // ── Logo (centered) ────────────────────────────────────────────────────────
   if (logoB64) {
     try {
       const fmt = logoB64.startsWith('data:image/png') ? 'PNG' : 'JPEG';
@@ -84,107 +125,168 @@ async function downloadReceiptPdf(tx: TransactionDto, type: 'BUY' | 'SELL' | 'CR
     } catch { /* skip */ }
   }
 
-  // ── Company details (centered) ─────────────────────────────────────────────
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
+  // ── Company name (bold, centered) ─────────────────────────────────────────
   if (company.name) {
+    doc.setFont(fontFamily, 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(17, 24, 39);
     doc.text(company.name, pageW / 2, cursorY, { align: 'center' });
-    cursorY += 5;
+    cursorY += 5.5;
   }
-  doc.setFont('helvetica', 'normal');
+  // Company address + contact (gray, centered)
+  doc.setFont(fontFamily, 'normal');
   doc.setFontSize(9);
+  doc.setTextColor(107, 114, 128);
   if (company.address) {
     doc.text(company.address, pageW / 2, cursorY, { align: 'center' });
     cursorY += 4;
   }
-  const contactLine = [company.email, company.phone].filter(Boolean).join('  |  ');
+  const contactLine = [company.phone, company.email].filter(Boolean).join('  |  ');
   if (contactLine) {
     doc.text(contactLine, pageW / 2, cursorY, { align: 'center' });
     cursorY += 4;
   }
 
-  // ── Divider ────────────────────────────────────────────────────────────────
-  if (company.name || company.address || contactLine) {
-    doc.setDrawColor(200, 200, 200);
-    doc.line(14, cursorY, pageW - 14, cursorY);
-    cursorY += 6;
-  }
+  // ── Horizontal divider ─────────────────────────────────────────────────────
+  doc.setDrawColor(229, 231, 235);
+  doc.setLineWidth(0.3);
+  doc.line(marginL, cursorY + 2, marginR, cursorY + 2);
+  cursorY += 8;
 
   // ── Title ──────────────────────────────────────────────────────────────────
   doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Exchange Receipt', pageW / 2, cursorY, { align: 'center' });
-  cursorY += 10;
+  doc.setFont(fontFamily, 'bold');
+  doc.setTextColor(17, 24, 39);
+  doc.text('Currency Exchange Receipt', pageW / 2, cursorY, { align: 'center' });
+  cursorY += 9;
 
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Receipt No: ${tx.receiptNumber}`, 14, cursorY);
-  cursorY += 6;
-  doc.text(`Date: ${tx.sessionDate?.toString().split('T')[0] ?? new Date().toISOString().split('T')[0]}`, 14, cursorY);
-  cursorY += 6;
+  // ── Divider below title ────────────────────────────────────────────────────
+  doc.setDrawColor(229, 231, 235);
+  doc.setLineWidth(0.3);
+  doc.line(marginL, cursorY, marginR, cursorY);
+  cursorY += 7;
+
+  // ── Meta info (two-column: gray label + bold value) ────────────────────────
+  const txDate = tx.sessionDate?.toString().split('T')[0] ?? new Date().toISOString().split('T')[0];
   const txTime = tx.createdAt
     ? new Date(tx.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
     : new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-  doc.text(`Time: ${txTime}`, 14, cursorY);
-  cursorY += 6;
-  const typeLabel = type === 'BUY' ? 'Buy' : type === 'SELL' ? 'Sell' : 'Cross';
-  doc.text(`Type: ${typeLabel}`, 14, cursorY);
-  cursorY += 6;
-  doc.text(`Customer: ${tx.customerName}`, 14, cursorY);
-  cursorY += 10;
 
+  const metaRows: [string, string][] = [
+    ['Receipt No', tx.receiptNumber],
+    ...(options?.cashierName ? [['Cashier', options.cashierName] as [string, string]] : []),
+    ['Date', txDate],
+    ['Time', txTime],
+    ['Customer', tx.customerName],
+  ];
+
+  const metaLabelX = marginL;
+  const metaValueX = marginL + 30;
+  doc.setFontSize(10);
+  for (const [label, value] of metaRows) {
+    doc.setFont(fontFamily, 'normal');
+    doc.setTextColor(107, 114, 128);
+    doc.text(`${label}:`, metaLabelX, cursorY);
+    doc.setFont(fontFamily, 'bold');
+    doc.setTextColor(17, 24, 39);
+    doc.text(value, metaValueX, cursorY);
+    cursorY += 5.5;
+  }
+  cursorY += 5;
+
+  // ── Greeting ──────────────────────────────────────────────────────────────
+  if (receiptMessages.greeting) {
+    doc.setFontSize(9);
+    doc.setFont(fontFamily, 'normal');
+    doc.setTextColor(55, 65, 81);
+    const greetingText = substitute(receiptMessages.greeting);
+    const lines = doc.splitTextToSize(greetingText, marginR - marginL) as string[];
+    doc.text(lines, marginL, cursorY);
+    cursorY += lines.length * 4.5 + 5;
+  }
+
+  // ── Transaction data rows ─────────────────────────────────────────────────
   const txIn  = (tx as unknown as { currencyIn?: { code: string } }).currencyIn;
   const txOut = (tx as unknown as { currencyOut?: { code: string } }).currencyOut;
   const inCode  = txIn?.code  ?? '';
   const outCode = txOut?.code ?? '';
 
-  function commLabel(cType: 'fixed' | 'pct', val: number): string {
-    return cType === 'fixed' ? `Fixed £${val.toFixed(2)}` : `${val}%`;
-  }
+  interface TxRow { label: string; value: string; valueRgb?: [number, number, number]; bold?: boolean; }
 
-  const commRows: string[][] = [];
+  const txRows: TxRow[] = [
+    { label: 'You gave',     value: `${tx.amountIn} ${inCode}`,   valueRgb: [220, 38, 38],  bold: true },
+    { label: 'You received', value: `${tx.amountOut} ${outCode}`, valueRgb: [22, 163, 74],  bold: true },
+  ];
+
+  // Commission rows
   if (commInfo && commInfo.deducted1Gbp > 0) {
-    if (type === 'CROSS') {
-      commRows.push([
-        `1st Commission (${commInfo.inCode ?? inCode}→GBP)`,
-        'GBP',
-        `${commInfo.deducted1Gbp.toFixed(2)} (${commLabel(commInfo.type1, commInfo.value1)})`,
-      ]);
-    } else {
-      commRows.push([
-        '1st Commission',
-        'GBP',
-        `${commInfo.deducted1Gbp.toFixed(2)} (${commLabel(commInfo.type1, commInfo.value1)})`,
-      ]);
-    }
+    txRows.push({ label: type === 'CROSS' ? 'Commission 1' : 'Commission', value: `${commInfo.deducted1Gbp.toFixed(2)} GBP` });
   }
   if (commInfo && type === 'CROSS' && commInfo.deducted2OutCcy != null && commInfo.deducted2OutCcy > 0) {
-    commRows.push([
-      `2nd Commission (GBP→${commInfo.outCode ?? outCode})`,
-      commInfo.outCode ?? outCode,
-      `${commInfo.deducted2OutCcy.toFixed(2)} (${commLabel(commInfo.type2!, commInfo.value2!)})`,
-    ]);
+    txRows.push({ label: 'Commission 2', value: `${commInfo.deducted2OutCcy.toFixed(2)} ${commInfo.outCode ?? outCode}` });
   }
 
-  autoTable(doc, {
-    startY: cursorY,
-    head: [['', 'Currency', 'Amount']],
-    body: [
-      ['Given',         inCode,  tx.amountIn?.toString()  ?? ''],
-      ['Received',      outCode, tx.amountOut?.toString() ?? ''],
-      ...commRows,
-      ['Rate applied',  '',      tx.rateApplied?.toString() ?? ''],
-    ],
-    styles: { fontSize: 10, overflow: 'linebreak', cellPadding: 3 },
-    headStyles: { fillColor: [10, 20, 110] },
-    columnStyles: {
-      0: { cellWidth: 70 },
-      1: { cellWidth: 22, halign: 'center' },
-      2: { cellWidth: 'auto' },
-    },
-    tableWidth: 'auto',
-  });
+  // Rate rows
+  if (type === 'CROSS') {
+    txRows.push({ label: `Rate 1 (${inCode} ${arrowChar} GBP)`, value: (tx as { buyRateSnapshot?: string | null }).buyRateSnapshot ?? tx.rateApplied?.toString() ?? '' });
+    txRows.push({ label: `Rate 2 (GBP ${arrowChar} ${outCode})`, value: (tx as { sellRateSnapshot?: string | null }).sellRateSnapshot ?? '' });
+  } else if (type === 'BUY') {
+    txRows.push({ label: `Rate (${inCode} ${arrowChar} GBP)`, value: tx.rateApplied?.toString() ?? '' });
+  } else {
+    txRows.push({ label: `Rate (GBP ${arrowChar} ${outCode})`, value: tx.rateApplied?.toString() ?? '' });
+  }
 
+  // Draw the two-column table manually for full color/style control
+  const col1X = marginL;
+  const col2X = marginL + 72;
+  const rowH = 9;
+
+  for (let i = 0; i < txRows.length; i++) {
+    const row = txRows[i];
+    const isLast = i === txRows.length - 1;
+
+    // Label — gray
+    doc.setFont(fontFamily, 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(107, 114, 128);
+    doc.text(row.label, col1X, cursorY + 6);
+
+    // Value — colored / bold
+    const [r, g, b] = row.valueRgb ?? [17, 24, 39];
+    doc.setTextColor(r, g, b);
+    doc.setFont(fontFamily, row.bold ? 'bold' : 'normal');
+    doc.text(row.value, col2X, cursorY + 6);
+
+    // Divider between rows
+    if (!isLast) {
+      doc.setDrawColor(243, 244, 246);
+      doc.setLineWidth(0.25);
+      doc.line(col1X, cursorY + rowH, marginR, cursorY + rowH);
+    }
+    cursorY += rowH;
+  }
+  cursorY += 8;
+
+  // ── Closing message ────────────────────────────────────────────────────────
+  if (receiptMessages.closing) {
+    doc.setFontSize(9);
+    doc.setFont(fontFamily, 'normal');
+    doc.setTextColor(55, 65, 81);
+    const closingText = substitute(receiptMessages.closing);
+    const closingLines = doc.splitTextToSize(closingText, marginR - marginL) as string[];
+    doc.text(closingLines, marginL, cursorY);
+    cursorY += closingLines.length * 4.5 + 5;
+  }
+
+  // ── Footer note ────────────────────────────────────────────────────────────
+  doc.setFontSize(8);
+  doc.setFont(fontFamily, 'normal');
+  doc.setTextColor(156, 163, 175);
+  doc.text('This is an automated receipt. Please keep it for your records.', marginL, cursorY);
+
+  if (options?.returnBuffer) {
+    return doc.output('arraybuffer');
+  }
   doc.save(`receipt-${tx.receiptNumber}.pdf`);
 }
 
@@ -333,13 +435,37 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
   }, [amountIn, rateApplied, currencyInId, currencyOutId, currencies, setValue, commType, commValue, commType2, commValue2, crossInfo]);
 
   const mutation = useMutation({
-    mutationFn: (data: FormData) =>
-      api
-        .post<TransactionDto>('/transactions', { ...data, type, sessionDate: today })
-        .then((r) => r.data),
+    mutationFn: (data: FormData) => {
+      const comm = pendingCommRef.current;
+      return api
+        .post<TransactionDto>('/transactions', {
+          ...data,
+          type,
+          sessionDate: today,
+          ...(comm?.deducted1Gbp != null && comm.deducted1Gbp > 0 && { commission1: comm.deducted1Gbp.toFixed(2) }),
+          ...(comm?.deducted2OutCcy != null && comm.deducted2OutCcy > 0 && { commission2: comm.deducted2OutCcy.toFixed(2) }),
+        })
+        .then((r) => r.data);
+    },
     onSuccess: (tx) => {
       setLastReceipt(tx);
       setLastCommInfo(pendingCommRef.current);
+      // Auto-save PDF to server (fire-and-forget — errors are silently swallowed)
+      const commSnapshot = pendingCommRef.current;
+      void (async () => {
+        try {
+          const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+          const buffer = await downloadReceiptPdf(tx, type, commSnapshot, { returnBuffer: true, cashierName: user?.receiptAlias ?? user?.fullName ?? '' });
+          if (buffer && token) {
+            const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer as ArrayBuffer)));
+            await fetch(`/api/v1/transactions/${tx.id}/save-pdf`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ pdfBase64: base64, filename: `receipt-${tx.receiptNumber}.pdf` }),
+            });
+          }
+        } catch { /* silent */ }
+      })();
       pendingCommRef.current = null;
       reset();
       setResetCount((n) => n + 1); // triggers GBP re-lock useEffect
@@ -353,7 +479,7 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
     },
   });
 
-  void user;
+  // user is referenced via user?.fullName in downloadReceiptPdf calls
 
   return (
     <div className="max-w-2xl">
@@ -366,7 +492,7 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
             </div>
           </div>
           <button
-            onClick={() => downloadReceiptPdf(lastReceipt, type, lastCommInfo)}
+            onClick={() => downloadReceiptPdf(lastReceipt, type, lastCommInfo, { cashierName: user?.receiptAlias ?? user?.fullName ?? '' })}
             className="text-xs border border-green-600 text-green-700 rounded px-3 py-1.5 hover:bg-green-100"
           >
             {t('receipt')} (PDF)
@@ -571,15 +697,6 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
             min="0"
             {...register('rateApplied', { required: true })}
             className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e] bg-blue-50"
-          />
-        </div>
-
-        {/* Notes */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t('notes')}</label>
-          <input
-            {...register('notes')}
-            className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]"
           />
         </div>
 

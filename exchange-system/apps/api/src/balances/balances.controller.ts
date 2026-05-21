@@ -23,6 +23,13 @@ export class BalancesController {
     return this.svc.getCurrentBalances(date);
   }
 
+  @Get('history')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  getHistory() {
+    return this.svc.getHistory();
+  }
+
   @Post()
   @UseGuards(RolesGuard)
   @Roles('ADMIN')

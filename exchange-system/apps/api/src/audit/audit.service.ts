@@ -17,4 +17,13 @@ export class AuditService {
   }): Promise<AuditLog> {
     return this.prisma.auditLog.create({ data: params });
   }
+
+  async queryByEntity(entity: string, action?: string, limit = 30) {
+    return this.prisma.auditLog.findMany({
+      where: { entity, ...(action ? { action } : {}) },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: { user: { select: { username: true, fullName: true } } },
+    });
+  }
 }

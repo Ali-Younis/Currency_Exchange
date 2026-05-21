@@ -42,4 +42,12 @@ export class CreateTransactionDto {
   @IsString()
   @MaxLength(500)
   notes?: string;
+
+  @IsOptional()
+  @IsNumberString()
+  commission1?: string;
+
+  @IsOptional()
+  @IsNumberString()
+  commission2?: string;
 }

@@ -117,10 +117,14 @@ export class BackupService {
     fs.writeFileSync(filepath, JSON.stringify(data, null, 2), 'utf-8');
 
     this.logger.log(`Backup written to ${filepath}`);
+    await Promise.all([
+      this.settings.set('backup_last_run', new Date().toISOString()),
+      this.settings.set('backup_last_status', 'success'),
+    ]);
     return filepath;
   }
 
-  /** Runs every minute and triggers backup when configured time matches */
+  /** Runs every minute and triggers backup once per day at or after the configured time. */
   @Cron('* * * * *')
   async scheduledBackupCheck(): Promise<void> {
     const enabled = await this.settings.get('backup_auto_enabled');
@@ -130,14 +134,29 @@ export class BackupService {
     if (!configTime) return;
 
     const now = new Date();
-    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    if (currentTime !== configTime) return;
+    const [configHour, configMin] = configTime.split(':').map(Number);
+    const configMinutes = configHour * 60 + configMin;
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    // Fire only after the configured time is reached (within a 10-minute grace window)
+    if (currentMinutes < configMinutes || currentMinutes > configMinutes + 9) return;
+
+    // Skip if a backup has already been taken today (prevents duplicate runs)
+    const lastRun = await this.settings.get('backup_last_run');
+    const today = now.toISOString().slice(0, 10); // YYYY-MM-DD (UTC date)
+    if (lastRun && new Date(lastRun).toISOString().slice(0, 10) === today) {
+      return;
+    }
 
     try {
       const filepath = await this.backupToFile();
       this.logger.log(`Scheduled backup completed: ${filepath}`);
     } catch (err) {
       this.logger.error('Scheduled backup failed', err);
+      await Promise.all([
+        this.settings.set('backup_last_run', new Date().toISOString()),
+        this.settings.set('backup_last_status', `failed: ${(err as Error).message}`),
+      ]);
     }
   }
 }

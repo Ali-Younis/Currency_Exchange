@@ -21,29 +21,26 @@ export class ReportsService {
 
     const rows = await Promise.all(
       currencies.map(async (currency) => {
-        // Opening balance for this date
-        const openingBal = await this.prisma.openingBalance.findUnique({
-          where: {
-            currencyId_sessionDate: { currencyId: currency.id, sessionDate: date },
-          },
+        // Opening balance for this date (carry-forward: use the latest set on or before this date)
+        const openingBal = await this.prisma.openingBalance.findFirst({
+          where: { currencyId: currency.id, sessionDate: { lte: date } },
+          orderBy: { sessionDate: 'desc' },
         });
 
-        // Sum of all BUY transactions where this currency came IN (agency receives it)
+        // Sum of all transactions where this currency came IN (agency receives it)
         const buysIn = await this.prisma.transaction.aggregate({
           where: {
             currencyInId: currency.id,
-            type: 'BUY',
             sessionDate: date,
             isVoided: false,
           },
           _sum: { amountIn: true },
         });
 
-        // Sum of all SELL transactions where this currency went OUT (agency gives it)
+        // Sum of all transactions where this currency went OUT (agency gives it)
         const sellsOut = await this.prisma.transaction.aggregate({
           where: {
             currencyOutId: currency.id,
-            type: 'SELL',
             sessionDate: date,
             isVoided: false,
           },

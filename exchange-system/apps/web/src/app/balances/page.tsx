@@ -8,9 +8,19 @@ import { useState } from 'react';
 import api from '@/lib/api';
 import { CurrencyDto, OpeningBalanceDto } from '@exchange/shared';
 import { CurrencyLabel } from '@/components/CurrencyLabel';
+import { useAuth } from '@/contexts/AuthContext';
+
+interface HistoryEntry {
+  id: string;
+  createdAt: string;
+  payload?: { currencyId?: string; amount?: string; sessionDate?: string } | null;
+  user?: { username: string; fullName: string } | null;
+}
 
 export default function BalancesPage() {
   const t = useTranslations('balance');
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const qc = useQueryClient();
   const today = new Date().toISOString().split('T')[0];
   const [date, setDate] = useState(today);
@@ -28,6 +38,12 @@ export default function BalancesPage() {
     select: (data) => data as OpeningBalanceDto[],
   });
 
+  const { data: history } = useQuery<HistoryEntry[]>({
+    queryKey: ['balances-history'],
+    queryFn: () => api.get('/balances/history').then((r) => r.data),
+    enabled: isAdmin,
+  });
+
   const mutation = useMutation({
     mutationFn: (entries: Array<{ currencyId: string; amount: string }>) =>
       Promise.all(
@@ -37,6 +53,8 @@ export default function BalancesPage() {
       ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['opening-balances', date] });
+      qc.invalidateQueries({ queryKey: ['balances-history'] });
+      setAmounts({});
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     },
@@ -49,7 +67,7 @@ export default function BalancesPage() {
 
   function handleSave() {
     const entries = Object.entries(amounts)
-      .filter(([, v]) => v !== '')
+      .filter(([currencyId, v]) => v !== '' && v !== getExisting(currencyId))
       .map(([currencyId, amount]) => ({ currencyId, amount }));
     if (entries.length > 0) mutation.mutate(entries);
   }
@@ -86,8 +104,8 @@ export default function BalancesPage() {
                 type="number"
                 step="0.01"
                 min="0"
-                placeholder={getExisting(c.id) || '0.00'}
-                value={amounts[c.id] ?? ''}
+                placeholder="0.00"
+                value={amounts[c.id] ?? getExisting(c.id)}
                 onChange={(e) => setAmounts((p) => ({ ...p, [c.id]: e.target.value }))}
                 className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]"
               />
@@ -97,12 +115,60 @@ export default function BalancesPage() {
 
         <button
           onClick={handleSave}
-          disabled={mutation.isPending || Object.keys(amounts).length === 0}
+          disabled={mutation.isPending}
           className="bg-[#0a146e] text-white font-semibold px-6 py-2.5 rounded-lg hover:bg-[#070e57] transition-colors disabled:opacity-60"
         >
           {mutation.isPending ? 'Saving…' : 'Save Balances'}
         </button>
       </div>
+
+      {/* Change History (admin only) */}
+      {isAdmin && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm mt-6 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h3 className="text-sm font-semibold text-gray-700">Change History</h3>
+          </div>
+          {history && history.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 text-gray-500 text-xs uppercase">
+                    <th className="text-left px-5 py-3">Date</th>
+                    <th className="text-left px-5 py-3">Session Date</th>
+                    <th className="text-left px-5 py-3">Currency</th>
+                    <th className="text-right px-5 py-3">Amount</th>
+                    <th className="text-left px-5 py-3">Set By</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((h) => {
+                    const ccy = currencies?.find((c) => c.id === h.payload?.currencyId);
+                    return (
+                      <tr key={h.id} className="border-t border-gray-100 hover:bg-gray-50">
+                        <td className="px-5 py-3 text-gray-600">
+                          {new Date(h.createdAt).toLocaleString()}
+                        </td>
+                        <td className="px-5 py-3 text-gray-600">{h.payload?.sessionDate ?? '—'}</td>
+                        <td className="px-5 py-3 font-medium text-gray-900">
+                          {ccy?.code ?? h.payload?.currencyId ?? '—'}
+                        </td>
+                        <td className="px-5 py-3 text-right font-semibold text-gray-900">
+                          {h.payload?.amount ?? '—'}
+                        </td>
+                        <td className="px-5 py-3 text-gray-600">
+                          {h.user?.fullName ?? h.user?.username ?? '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-8">No history available.</p>
+          )}
+        </div>
+      )}
     </AppShell>
   );
 }

@@ -68,6 +68,21 @@ export default function SettingsPage() {
   const [restoreMsg, setRestoreMsg] = useState('');
   const [restoring, setRestoring] = useState(false);
 
+  // Receipt messages
+  const [receiptMsg, setReceiptMsgState] = useState({ greeting: '', closing: '' });
+  const [receiptMsgSaving, setReceiptMsgSaving] = useState(false);
+  const [receiptMsgResult, setReceiptMsgResult] = useState('');
+
+  // Backup last-run status
+  const [backupLastRun, setBackupLastRun] = useState<string | null>(null);
+  const [backupLastStatus, setBackupLastStatus] = useState<string | null>(null);
+  const [backupRunning, setBackupRunning] = useState(false);
+
+  // PDF save directory
+  const [pdfDir, setPdfDir] = useState('/app/pdf-receipts');
+  const [pdfDirSaving, setPdfDirSaving] = useState(false);
+  const [pdfDirMsg, setPdfDirMsg] = useState('');
+
   useEffect(() => {
     const stored = getCookie('locale') as Locale | undefined;
     if (stored === 'en' || stored === 'ar') setLocale(stored);
@@ -101,8 +116,21 @@ export default function SettingsPage() {
     // Backup config
     fetch(`${API}/backup/config`, { headers: authHeaders() })
       .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (d) setBackupConfig({ directory: d.directory, autoTime: d.autoTime, autoEnabled: d.autoEnabled }); })
+      .then((d) => {
+        if (d) {
+          setBackupConfig({ directory: d.directory, autoTime: d.autoTime, autoEnabled: d.autoEnabled });
+          if (d.lastRun) setBackupLastRun(d.lastRun);
+          if (d.lastStatus) setBackupLastStatus(d.lastStatus);
+        }
+      })
       .catch(() => {});
+    // Receipt messages
+    Promise.all([getSetting('receipt_greeting'), getSetting('receipt_closing')])
+      .then(([greeting, closing]) => {
+        setReceiptMsgState({ greeting: greeting ?? '', closing: closing ?? '' });
+      });
+    // PDF save directory
+    getSetting('pdf_save_directory').then((v) => { if (v) setPdfDir(v); });
   }, []);
 
   function handleLocaleChange(l: Locale) {
@@ -242,6 +270,41 @@ export default function SettingsPage() {
       setBackupMsg('Auto-backup settings saved.');
     } catch { setBackupMsg('Failed to save backup settings.'); }
     setBackupConfigSaving(false);
+  }
+
+  async function runBackupNow() {
+    setBackupRunning(true);
+    setBackupMsg('');
+    try {
+      const r = await fetch(`${API}/backup/run-now`, { method: 'POST', headers: authHeaders() });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const config = await fetch(`${API}/backup/config`, { headers: authHeaders() }).then((res) => res.json());
+      if (config.lastRun) setBackupLastRun(config.lastRun);
+      if (config.lastStatus) setBackupLastStatus(config.lastStatus);
+      setBackupMsg('Backup completed successfully.');
+    } catch (err) {
+      setBackupMsg(`Backup failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+    setBackupRunning(false);
+  }
+
+  async function saveReceiptMessages() {
+    setReceiptMsgSaving(true);
+    setReceiptMsgResult('');
+    await Promise.all([
+      setSetting('receipt_greeting', receiptMsg.greeting),
+      setSetting('receipt_closing', receiptMsg.closing),
+    ]);
+    setReceiptMsgResult('Receipt messages saved.');
+    setReceiptMsgSaving(false);
+  }
+
+  async function savePdfDirectory() {
+    setPdfDirSaving(true);
+    setPdfDirMsg('');
+    await setSetting('pdf_save_directory', pdfDir);
+    setPdfDirMsg('PDF save directory saved.');
+    setPdfDirSaving(false);
   }
 
   return (
@@ -405,6 +468,46 @@ export default function SettingsPage() {
           {companyMsg && <p className="text-xs mt-2 text-green-600">{companyMsg}</p>}
         </div>
 
+        {/* Receipt Messages */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Receipt Messages</h3>
+          <p className="text-xs text-gray-400 mb-4">
+            Customize the greeting and closing text on email and PDF receipts. Use{' '}
+            <code className="bg-gray-100 px-1 rounded text-gray-700">{'{customerName}'}</code> and{' '}
+            <code className="bg-gray-100 px-1 rounded text-gray-700">{'{companyName}'}</code> as placeholders.
+          </p>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Greeting Message</label>
+              <textarea
+                value={receiptMsg.greeting}
+                onChange={(e) => setReceiptMsgState((m) => ({ ...m, greeting: e.target.value }))}
+                rows={3}
+                placeholder={`Dear {customerName},\n\nThank you for your transaction.`}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Closing Message</label>
+              <textarea
+                value={receiptMsg.closing}
+                onChange={(e) => setReceiptMsgState((m) => ({ ...m, closing: e.target.value }))}
+                rows={3}
+                placeholder="Thank you for choosing {companyName} for your currency exchange needs."
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]"
+              />
+            </div>
+          </div>
+          <button
+            onClick={saveReceiptMessages}
+            disabled={receiptMsgSaving}
+            className="mt-4 px-5 py-2 text-sm bg-[#0a146e] text-white rounded-lg hover:bg-[#070e57] disabled:opacity-50"
+          >
+            {receiptMsgSaving ? 'Saving…' : 'Save Receipt Messages'}
+          </button>
+          {receiptMsgResult && <p className="text-xs mt-2 text-green-600">{receiptMsgResult}</p>}
+        </div>
+
         {/* Backup & Restore */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
           <h3 className="text-sm font-semibold text-gray-700 mb-4">Backup &amp; Restore</h3>
@@ -483,32 +586,70 @@ export default function SettingsPage() {
                 </p>
               </div>
             </div>
-            <button
-              onClick={saveBackupConfig}
-              disabled={backupConfigSaving}
-              className="mt-4 px-5 py-2 text-sm bg-[#0a146e] text-white rounded-lg hover:bg-[#070e57] disabled:opacity-50"
-            >
-              {backupConfigSaving ? 'Saving…' : 'Save Auto-Backup Settings'}
-            </button>
+            <div className="flex flex-wrap gap-3 mt-4 items-center">
+              <button
+                onClick={saveBackupConfig}
+                disabled={backupConfigSaving}
+                className="px-5 py-2 text-sm bg-[#0a146e] text-white rounded-lg hover:bg-[#070e57] disabled:opacity-50"
+              >
+                {backupConfigSaving ? 'Saving…' : 'Save Auto-Backup Settings'}
+              </button>
+              <button
+                onClick={runBackupNow}
+                disabled={backupRunning}
+                className="px-5 py-2 text-sm border border-[#0a146e] text-[#0a146e] rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                {backupRunning ? 'Running…' : 'Run Now'}
+              </button>
+            </div>
+            {backupLastRun && (
+              <p className={`text-xs mt-2 ${backupLastStatus?.startsWith('failed') ? 'text-red-500' : 'text-green-600'}`}>
+                Last backup: {new Date(backupLastRun).toLocaleString()} —{' '}
+                {backupLastStatus?.startsWith('failed') ? `✗ ${backupLastStatus}` : '✓ Success'}
+              </p>
+            )}
             {backupMsg && (
-              <p className={`text-xs mt-2 ${backupMsg.includes('failed') || backupMsg.includes('Failed') ? 'text-red-500' : 'text-green-600'}`}>
+              <p className={`text-xs mt-1 ${backupMsg.includes('failed') || backupMsg.includes('Failed') ? 'text-red-500' : 'text-green-600'}`}>
                 {backupMsg}
               </p>
             )}
+            <p className="text-xs text-gray-400 mt-2">
+              Backup files are saved to the Docker volume. Use the &apos;Download Backup&apos; button above to export and save a copy locally.
+            </p>
           </div>
         </div>
 
-        {/* About */}
+        {/* PDF Receipt Storage */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <h3 className="text-sm font-semibold text-gray-700 mb-2">About</h3>          <dl className="text-sm space-y-1 text-gray-600">
-            <div className="flex gap-2"><dt className="text-gray-400 w-32">System</dt><dd>Exchange Manager</dd></div>
-            <div className="flex gap-2"><dt className="text-gray-400 w-32">Version</dt><dd>1.0.0</dd></div>
-            <div className="flex gap-2"><dt className="text-gray-400 w-32">Base Currency</dt><dd>GBP (£)</dd></div>
-            <div className="flex gap-2"><dt className="text-gray-400 w-32">Developer</dt><dd>AliTech</dd></div>
-          </dl>
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">PDF Receipt Storage</h3>
+          <p className="text-xs text-gray-400 mb-4">
+            Automatically save a copy of each PDF receipt to a server folder after every transaction.
+          </p>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Save Directory (server path)</label>
+            <input
+              type="text"
+              value={pdfDir}
+              onChange={(e) => setPdfDir(e.target.value)}
+              placeholder="/app/pdf-receipts"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              PDF receipts are saved inside the Docker volume. Access via Docker or mount the volume to a host path.
+            </p>
+          </div>
+          <button
+            onClick={savePdfDirectory}
+            disabled={pdfDirSaving}
+            className="mt-4 px-5 py-2 text-sm bg-[#0a146e] text-white rounded-lg hover:bg-[#070e57] disabled:opacity-50"
+          >
+            {pdfDirSaving ? 'Saving…' : 'Save PDF Directory'}
+          </button>
+          {pdfDirMsg && <p className="text-xs mt-2 text-green-600">{pdfDirMsg}</p>}
         </div>
       </div>
     </AppShell>
   );
 }
+
 

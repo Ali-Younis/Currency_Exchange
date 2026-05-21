@@ -18,6 +18,11 @@ export class CreateUserDto {
   @MaxLength(100)
   fullName!: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  receiptAlias?: string;
+
   @IsIn(['ADMIN', 'TELLER'])
   role!: Role;
 

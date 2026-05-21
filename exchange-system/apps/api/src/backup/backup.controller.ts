@@ -66,15 +66,19 @@ export class BackupController {
   /** Get auto-backup configuration */
   @Get('config')
   async getConfig() {
-    const [directory, autoTime, autoEnabled] = await Promise.all([
+    const [directory, autoTime, autoEnabled, lastRun, lastStatus] = await Promise.all([
       this.settings.get('backup_directory'),
       this.settings.get('backup_auto_time'),
       this.settings.get('backup_auto_enabled'),
+      this.settings.get('backup_last_run'),
+      this.settings.get('backup_last_status'),
     ]);
     return {
       directory: directory ?? '/app/backups',
       autoTime: autoTime ?? '02:00',
       autoEnabled: autoEnabled === 'true',
+      lastRun: lastRun ?? null,
+      lastStatus: lastStatus ?? null,
     };
   }
 
