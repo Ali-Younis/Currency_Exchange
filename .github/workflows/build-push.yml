@@ -1,0 +1,107 @@
+name: Build & Push Docker Images
+
+# Triggers: push to main (auto) or manually from the Actions tab.
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Additional image tag (e.g. v1.2.0). Always also pushes :latest'
+        required: false
+        default: ''
+
+env:
+  REGISTRY: ghcr.io
+  API_IMAGE: ghcr.io/${{ github.repository_owner }}/exchange-api
+  WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/exchange-web
+
+jobs:
+  build-push:
+    name: Build & Push
+    runs-on: ubuntu-latest
+
+    # These permissions let GITHUB_TOKEN push to ghcr.io
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      # ── 1. Checkout source ─────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Multi-platform support (amd64 + arm64) ──────────────────────────
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── 3. Authenticate to GHCR ────────────────────────────────────────────
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 4. Compute image tags ──────────────────────────────────────────────
+      - name: Compute tags
+        id: tags
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          API_TAGS="${{ env.API_IMAGE }}:latest,${{ env.API_IMAGE }}:sha-${SHORT_SHA}"
+          WEB_TAGS="${{ env.WEB_IMAGE }}:latest,${{ env.WEB_IMAGE }}:sha-${SHORT_SHA}"
+
+          if [[ -n "${{ github.event.inputs.tag }}" ]]; then
+            API_TAGS="${API_TAGS},${{ env.API_IMAGE }}:${{ github.event.inputs.tag }}"
+            WEB_TAGS="${WEB_TAGS},${{ env.WEB_IMAGE }}:${{ github.event.inputs.tag }}"
+          fi
+
+          echo "api_tags=${API_TAGS}"   >> "$GITHUB_OUTPUT"
+          echo "web_tags=${WEB_TAGS}"   >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      # ── 5. Build & push — NestJS API ──────────────────────────────────────
+      - name: Build & push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./exchange-system
+          file: ./exchange-system/apps/api/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.api_tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          labels: |
+            org.opencontainers.image.title=Exchange Manager API
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      # ── 6. Build & push — Next.js Web ─────────────────────────────────────
+      - name: Build & push Web image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./exchange-system
+          file: ./exchange-system/apps/web/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.web_tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          labels: |
+            org.opencontainers.image.title=Exchange Manager Web
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      # ── 7. Summary ────────────────────────────────────────────────────────
+      - name: Job summary
+        run: |
+          echo "### Images published" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Image | Tags |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| \`${{ env.API_IMAGE }}\` | \`latest\`, \`sha-${{ steps.tags.outputs.short_sha }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| \`${{ env.WEB_IMAGE }}\` | \`latest\`, \`sha-${{ steps.tags.outputs.short_sha }}\` |" >> "$GITHUB_STEP_SUMMARY"
