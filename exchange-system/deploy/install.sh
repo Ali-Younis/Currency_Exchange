@@ -12,7 +12,7 @@
 set -euo pipefail
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-GITHUB_OWNER="Ali-Younis"
+GITHUB_OWNER="ali-younis"   # must be lowercase — Docker registry names are case-sensitive
 INSTALL_DIR="${INSTALL_DIR:-${HOME}/exchange-manager}"
 
 # PAT passed as first argument (required when running via curl | bash -s -- PAT)
