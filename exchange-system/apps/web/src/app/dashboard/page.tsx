@@ -55,7 +55,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <AppShell>
+    <AppShell permission="dashboard">
       {isLoading ? (
         <div className="flex justify-center py-20">
           <div className="animate-spin rounded-full h-10 w-10 border-4 border-[#0a146e] border-t-transparent" />

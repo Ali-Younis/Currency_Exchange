@@ -28,7 +28,17 @@ export class TransactionsService {
     private readonly email: EmailService,
   ) {}
 
-  async create(dto: CreateTransactionDto, tellerId: string) {
+  async create(dto: CreateTransactionDto, tellerId: string, role: string = 'ADMIN') {
+    // Check section permission for non-admin users
+    if (role !== 'ADMIN') {
+      const permissionKey = dto.type === 'BUY' ? 'buy' : dto.type === 'SELL' ? 'sell' : 'cross';
+      const dbUser = await this.prisma.user.findUnique({ where: { id: tellerId }, select: { permissions: true } });
+      const userPerms = Array.isArray(dbUser?.permissions) ? (dbUser.permissions as string[]) : [];
+      if (!userPerms.includes(permissionKey)) {
+        throw new ForbiddenException(`You do not have permission to perform ${dto.type} transactions`);
+      }
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let createdTx: any = null;
     let valueInGbpForAudit = new Prisma.Decimal(0);

@@ -3,6 +3,8 @@ import { ReportsService } from './reports.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 
 const today = () => new Date().toISOString().split('T')[0];
 const thirtyDaysAgo = () => {
@@ -19,11 +21,15 @@ export class ReportsController {
   // ── Existing endpoints ────────────────────────────────────────────────────
 
   @Get('session')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('reports')
   getSessionReport(@Query('date') date: string) {
     return this.svc.getSessionReport(date ?? today());
   }
 
   @Get('ledger')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('ledger')
   getDailyLedger(@Query('date') date: string) {
     return this.svc.getDailyLedger(date ?? today());
   }

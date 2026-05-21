@@ -809,7 +809,7 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
 export function BuyPage() {
   const t = useTranslations();
   return (
-    <AppShell>
+    <AppShell permission="buy">
       <PageHeader
         title={t('transaction.buy')}
         subtitle="Customer gives foreign currency · receives GBP"
@@ -822,7 +822,7 @@ export function BuyPage() {
 export function SellPage() {
   const t = useTranslations();
   return (
-    <AppShell>
+    <AppShell permission="sell">
       <PageHeader
         title={t('transaction.sell')}
         subtitle="Customer gives GBP · receives foreign currency"
@@ -835,7 +835,7 @@ export function SellPage() {
 export function CrossPage() {
   const t = useTranslations();
   return (
-    <AppShell>
+    <AppShell permission="cross">
       <PageHeader
         title={t('nav.cross')}
         subtitle="Exchange between two non-GBP currencies · GBP bridge applied automatically"

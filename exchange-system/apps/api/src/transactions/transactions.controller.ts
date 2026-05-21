@@ -7,6 +7,8 @@ import { TransactionsService } from './transactions.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { VoidTransactionDto } from './dto/void-transaction.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthTokenPayload } from '@exchange/shared';
 import { AppSettingsService } from '../app-settings/app-settings.service';
@@ -20,6 +22,8 @@ export class TransactionsController {
   ) {}
 
   @Get()
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('dashboard')
   findAll(
     @Query('date') date?: string,
     @Query('type') type?: string,
@@ -46,7 +50,7 @@ export class TransactionsController {
     @Body() dto: CreateTransactionDto,
     @CurrentUser() user: AuthTokenPayload,
   ) {
-    return this.svc.create(dto, user.sub);
+    return this.svc.create(dto, user.sub, user.role);
   }
 
   @Patch(':id/void')

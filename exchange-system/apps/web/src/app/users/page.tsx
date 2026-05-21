@@ -7,7 +7,14 @@ import { useState } from 'react';
 import api from '@/lib/api';
 import { UserSummary, CreateUserDto } from '@exchange/shared';
 
-const TELLER_PERMISSIONS = ['buy', 'sell', 'ledger', 'reports'] as const;
+const TELLER_PERMISSIONS: { key: string; label: string }[] = [
+  { key: 'dashboard', label: "Today's Transactions" },
+  { key: 'buy',       label: 'Buy' },
+  { key: 'sell',      label: 'Sell' },
+  { key: 'cross',     label: 'Cross-Currency' },
+  { key: 'ledger',    label: 'Ledger' },
+  { key: 'reports',   label: 'Reports' },
+];
 
 function UserModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState<CreateUserDto & { password: string }>({  username: '',
@@ -136,15 +143,15 @@ function EditPanel({
           <div className="mb-4">
             <p className="text-xs font-medium text-gray-500 uppercase mb-2">Section Access</p>
             <div className="grid grid-cols-2 gap-2">
-              {TELLER_PERMISSIONS.map((p) => (
-                <label key={p} className="flex items-center gap-2 text-sm cursor-pointer">
+              {TELLER_PERMISSIONS.map(({ key, label }) => (
+                <label key={key} className="flex items-center gap-2 text-sm cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={permissions.includes(p)}
-                    onChange={() => togglePerm(p)}
+                    checked={permissions.includes(key)}
+                    onChange={() => togglePerm(key)}
                     className="rounded border-gray-300 text-[#0a146e] focus:ring-[#0a146e]"
                   />
-                  <span className="capitalize">{p}</span>
+                  <span>{label}</span>
                 </label>
               ))}
             </div>

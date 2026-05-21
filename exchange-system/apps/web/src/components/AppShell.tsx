@@ -29,15 +29,18 @@ function LiveClock() {
   );
 }
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({ children, permission }: { children: React.ReactNode; permission?: string }) {
   const { user, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoading && !user) {
-      router.push('/login');
+    if (isLoading) return;
+    if (!user) { router.push('/login'); return; }
+    // Block tellers from sections they don't have permission for
+    if (permission && user.role !== 'ADMIN' && !user.permissions?.includes(permission)) {
+      router.replace('/dashboard');
     }
-  }, [isLoading, user, router]);
+  }, [isLoading, user, router, permission]);
 
   if (isLoading) {
     return (

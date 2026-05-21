@@ -15,21 +15,22 @@ interface NavItem {
   href: string;
   icon: React.ReactNode;
   adminOnly?: boolean;
+  permission?: string; // required permission key for non-admin users
 }
 
 const navItems: NavItem[] = [
-  { key: 'dashboard', href: '/dashboard', icon: <ClipboardList size={18} /> },
-  { key: 'buy', href: '/buy', icon: <ArrowDownCircle size={18} /> },
-  { key: 'sell', href: '/sell', icon: <ArrowUpCircle size={18} /> },
-  { key: 'cross', href: '/cross', icon: <ArrowLeftRight size={18} /> },
-  { key: 'ledger', href: '/ledger', icon: <BookOpen size={18} /> },
-  { key: 'reports', href: '/reports', icon: <BarChart2 size={18} /> },
-  { key: 'balances', href: '/balances', icon: <Landmark size={18} />, adminOnly: true },
+  { key: 'dashboard', href: '/dashboard', icon: <ClipboardList size={18} />, permission: 'dashboard' },
+  { key: 'buy',       href: '/buy',       icon: <ArrowDownCircle size={18} />, permission: 'buy' },
+  { key: 'sell',      href: '/sell',      icon: <ArrowUpCircle size={18} />,   permission: 'sell' },
+  { key: 'cross',     href: '/cross',     icon: <ArrowLeftRight size={18} />,  permission: 'cross' },
+  { key: 'ledger',    href: '/ledger',    icon: <BookOpen size={18} />,        permission: 'ledger' },
+  { key: 'reports',   href: '/reports',   icon: <BarChart2 size={18} />,       permission: 'reports' },
+  { key: 'balances',       href: '/balances',        icon: <Landmark size={18} />,  adminOnly: true },
   { key: 'currentBalances', href: '/current-balances', icon: <Activity size={18} />, adminOnly: true },
-  { key: 'rates', href: '/rates', icon: <TrendingUp size={18} />, adminOnly: true },
-  { key: 'currencies', href: '/currencies', icon: <Coins size={18} />, adminOnly: true },
-  { key: 'users', href: '/users', icon: <Users size={18} />, adminOnly: true },
-  { key: 'about', href: '/about', icon: <Info size={18} /> },
+  { key: 'rates',      href: '/rates',      icon: <TrendingUp size={18} />, adminOnly: true },
+  { key: 'currencies', href: '/currencies', icon: <Coins size={18} />,     adminOnly: true },
+  { key: 'users',      href: '/users',      icon: <Users size={18} />,     adminOnly: true },
+  { key: 'about',      href: '/about',      icon: <Info size={18} /> },
 ];
 
 export function Sidebar() {
@@ -84,7 +85,11 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 py-4 space-y-0.5 px-3">
         {navItems
-          .filter((item) => !item.adminOnly || isAdmin)
+          .filter((item) => {
+            if (item.adminOnly) return isAdmin;
+            if (!isAdmin && item.permission) return user?.permissions?.includes(item.permission);
+            return true;
+          })
           .map((item) => {
             const isActive = pathname.startsWith(item.href);
             return (

@@ -1015,7 +1015,7 @@ export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('session');
 
   return (
-    <AppShell>
+    <AppShell permission="reports">
       <PageHeader title={t('session')} />
 
       {/* Tab Bar */}

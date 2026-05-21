@@ -40,7 +40,7 @@ export default function LedgerPage() {
   const crosses = transactions.filter((t) => t.type === 'CROSS');
 
   return (
-    <AppShell>
+    <AppShell permission="ledger">
       <PageHeader
         title={t('nav.ledger')}
         actions={
