@@ -4,32 +4,19 @@
 #
 # Usage (run on the target machine):
 #
-#   curl -fsSL https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/YOUR_REPO/main/deploy/install.sh | bash
+#   curl -H "Authorization: token YOUR_PAT" -fsSL \
+#     https://raw.githubusercontent.com/Ali-Younis/Currency_Exchange/main/exchange-system/deploy/install.sh \
+#     | bash
 #
 # Requirements: Docker 24+ with the Compose plugin (docker compose v2).
 # Tested on: Ubuntu 22.04 / 24.04, Debian 12, RHEL 9, macOS 14.
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-# ── Configuration — edit these two lines before sharing with customers ────────
-GITHUB_OWNER="Ali-Younis"   # your GitHub username
-GITHUB_REPO="Currency_Exchange"          # your GitHub repo name
-BRANCH="main"
-# ─────────────────────────────────────────────────────────────────────────────
-
-RAW_BASE="https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/${BRANCH}/exchange-system/deploy"
+# ── Configuration ─────────────────────────────────────────────────────────────
+GITHUB_OWNER="Ali-Younis"
 INSTALL_DIR="${INSTALL_DIR:-${HOME}/exchange-manager}"
-
-# Accept GitHub PAT as first argument (required for private repos).
-# Usage:  curl ... | bash -s -- ghp_YOUR_TOKEN
-GH_TOKEN="${1:-${GH_TOKEN:-}}"
-
-# Build curl auth options
-if [[ -n "${GH_TOKEN}" ]]; then
-  gh_curl() { curl -H "Authorization: token ${GH_TOKEN}" "$@"; }
-else
-  gh_curl() { curl "$@"; }
-fi
+# ─────────────────────────────────────────────────────────────────────────────
 
 # ── Terminal colours ──────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -68,15 +55,203 @@ mkdir -p "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 info "Install path: ${BOLD}${INSTALL_DIR}${NC}"
 
-# ── 3. Download configuration files ──────────────────────────────────────────
-step "Downloading configuration files"
+# ── 3. Write configuration files (embedded) ───────────────────────────────────
+step "Writing configuration files"
 
-gh_curl -fsSL "${RAW_BASE}/docker-compose.yml" -o docker-compose.yml \
-  || error "Failed to download docker-compose.yml — check your internet connection."
-gh_curl -fsSL "${RAW_BASE}/nginx.conf"         -o nginx.conf \
-  || error "Failed to download nginx.conf."
+cat > docker-compose.yml <<'EOF_COMPOSE'
+# ─────────────────────────────────────────────────────────────────────────────
+# Exchange Manager — Production deployment
+#
+# Pulls pre-built images from GitHub Container Registry.
+# No source code is required on the customer's machine.
+#
+# Quick start:
+#   1. Copy .env.example  →  .env  and fill in GITHUB_OWNER + secrets
+#   2. docker compose pull
+#   3. docker compose up -d
+# ─────────────────────────────────────────────────────────────────────────────
 
-success "docker-compose.yml and nginx.conf downloaded."
+services:
+
+  # ── PostgreSQL 16 ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: exchange_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER:-exchange_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required — see .env}
+      POSTGRES_DB:       ${POSTGRES_DB:-exchange_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-exchange_user} -d ${POSTGRES_DB:-exchange_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis 7 ────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: exchange_redis
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── NestJS API ─────────────────────────────────────────────────────────────
+  api:
+    image: ghcr.io/${GITHUB_OWNER}/exchange-api:${IMAGE_TAG:-latest}
+    container_name: exchange_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV:      production
+      PORT:          3001
+      DATABASE_URL:  postgresql://${POSTGRES_USER:-exchange_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-exchange_db}?schema=public
+      REDIS_HOST:    redis
+      REDIS_PORT:    6379
+      JWT_SECRET:    ${JWT_SECRET:?JWT_SECRET is required — see .env}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      CORS_ORIGIN:   ${CORS_ORIGIN:-http://localhost}
+    volumes:
+      - backups_data:/app/backups
+      - pdf_receipts_data:/app/pdf-receipts
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/api/v1/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+
+  # ── Next.js Web UI ─────────────────────────────────────────────────────────
+  web:
+    image: ghcr.io/${GITHUB_OWNER}/exchange-web:${IMAGE_TAG:-latest}
+    container_name: exchange_web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      NODE_ENV:           production
+      API_INTERNAL_URL:   http://api:3001
+
+  # ── Nginx (single public entry point on port 80) ───────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: exchange_nginx
+    restart: unless-stopped
+    depends_on:
+      - web
+      - api
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+
+volumes:
+  postgres_data:
+  redis_data:
+  backups_data:
+  pdf_receipts_data:
+EOF_COMPOSE
+
+cat > nginx.conf <<'EOF_NGINX'
+# ─────────────────────────────────────────────────────────────────────────────
+# Exchange Manager — Nginx Reverse Proxy
+#
+# Single entry point on port 80, cloud-agnostic.
+# Works behind AWS ALB, GCP Load Balancer, Azure App Gateway, or bare-metal.
+#
+#  /api/v1/*  →  NestJS API container  (exchange_api:3001)
+#  /*         →  Next.js Web container (exchange_web:3000)
+# ─────────────────────────────────────────────────────────────────────────────
+
+worker_processes auto;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+
+    sendfile        on;
+    keepalive_timeout 65;
+    client_max_body_size 10M;
+
+    # ── Logging ───────────────────────────────────────────────────────────────
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent"';
+    access_log /var/log/nginx/access.log main;
+    error_log  /var/log/nginx/error.log warn;
+
+    # Docker's internal DNS resolver — defers host resolution to runtime
+    resolver 127.0.0.11 valid=10s ipv6=off;
+
+    # ── Server block ──────────────────────────────────────────────────────────
+    server {
+        listen 80;
+        server_name _;
+
+        # ── API: route directly to NestJS (bypasses Next.js rewrites) ─────────
+        location /api/ {
+            set $api_upstream http://api:3001;
+            proxy_pass         $api_upstream;
+            proxy_http_version 1.1;
+            proxy_set_header   Host              $host;
+            proxy_set_header   X-Real-IP         $remote_addr;
+            proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header   X-Forwarded-Proto $scheme;
+            proxy_read_timeout 60s;
+            proxy_send_timeout 60s;
+
+            # Pass original host so NestJS CORS rules work correctly
+            proxy_set_header   Origin            $http_origin;
+        }
+
+        # ── Health check endpoint passthrough ─────────────────────────────────
+        location /api/v1/health {
+            set $api_upstream http://api:3001;
+            proxy_pass         $api_upstream;
+            proxy_http_version 1.1;
+            proxy_set_header   Host $host;
+            access_log off;
+        }
+
+        # ── Frontend: all other requests go to Next.js ────────────────────────
+        location / {
+            set $web_upstream http://web:3000;
+            proxy_pass         $web_upstream;
+            proxy_http_version 1.1;
+
+            # Required for WebSocket support (Next.js HMR in dev)
+            proxy_set_header   Upgrade           $http_upgrade;
+            proxy_set_header   Connection        'upgrade';
+
+            proxy_set_header   Host              $host;
+            proxy_set_header   X-Real-IP         $remote_addr;
+            proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header   X-Forwarded-Proto $scheme;
+            proxy_cache_bypass $http_upgrade;
+            proxy_read_timeout 60s;
+        }
+    }
+}
+EOF_NGINX
+
+success "docker-compose.yml and nginx.conf written."
 
 # ── 4. Configure .env ─────────────────────────────────────────────────────────
 step "Configuring environment"
