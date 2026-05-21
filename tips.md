@@ -1,0 +1,2 @@
+- Command to use to reset the admin user's 2FA in case you get locked out:
+docker exec -it exchange_postgres psql -U exchange_user -d exchange_db -c "UPDATE users SET \"totpSecret\" = NULL, \"totpEnabled\" = false WHERE username = 'admin';"

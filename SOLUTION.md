@@ -163,3 +163,54 @@ Seed data is applied via `prisma db seed` in the API Docker entrypoint.
 ## Self-Containment
 
 The system has **no host dependencies** beyond Docker and Docker Compose. All npm packages are declared in `package.json` files and installed during `docker build`. No `npm install` is ever run on the host machine.
+
+---
+
+## Reports Reference
+
+All reports are served from `GET /reports/<endpoint>` and require a valid JWT.
+
+### Session Report (`/reports/session?date=YYYY-MM-DD`)
+**Per-currency daily summary.**
+- Opening balance: latest `OpeningBalance` record with `sessionDate ≤ requested date` (carry-forward)
+- `totalBuys` = Σ `amountIn` for all non-voided transactions where the currency came **in** on that date
+- `totalSells` = Σ `amountOut` for all non-voided transactions where the currency went **out** on that date
+- `closingBalance` = `openingBalance + totalBuys − totalSells`
+
+### Daily Ledger (`/reports/ledger?date=YYYY-MM-DD`)
+**All non-voided transactions for a session date**, returned in chronological order with full currency and teller details. Split into `buys`, `sells`, and `total` count.
+
+### Profit Report (`/reports/profit?startDate=…&endDate=…`)
+**Spread profit analysis per currency over a date range (admin only).**
+- `totalVolumeGbp` = Σ `valueInGbp` for all transactions involving that currency
+- `totalProfitGbp` = Σ `spreadProfitGbp` (calculated at transaction time as `|amountIn − amountOut|` converted to GBP)
+- `avgProfitPerTxnGbp` = `totalProfitGbp ÷ totalTransactions`
+- Includes `grandTotalProfitGbp` and `grandTotalVolumeGbp` across all currencies
+
+### Volume Report (`/reports/volume?startDate=…&endDate=…&groupBy=day|week|month`)
+**Transaction count and GBP volume over time, grouped into buckets (admin only).**
+- Optional `currencyId` query param to filter to a single currency
+- `trendPoints[]`: each bucket has `date` (bucket start), `count`, `volumeGbp`, `buys`, `sells`
+- Week buckets start on Monday (ISO); month buckets start on the 1st
+
+### Top Customers (`/reports/top-customers?startDate=…&endDate=…&limit=20`)
+**Customers ranked by total GBP volume (admin only).**
+- `totalVolumeGbp`, `totalProfitGbp`, `totalTransactions` per customer name
+- Sorted descending by volume; `limit` defaults to 20
+
+### Rate History (`/reports/rate-history/:currencyId?startDate=…&endDate=…`)
+**Historical buy/sell rates for a currency (admin only).**
+- Returns each `ExchangeRate` record in date order with `buyRate`, `sellRate`, and computed `spread = sellRate − buyRate`
+
+### Audit Trail (`/reports/audit?startDate=…&endDate=…&action=…&userId=…&page=1&pageSize=50`)
+**Paginated log of all administrative actions (admin only).**
+- Filters: date range, action keyword (case-insensitive contains), user ID
+- Returns `data[]`, `total`, `page`, `pageSize`
+- Actions include: `SET_OPENING_BALANCE`, `CREATE_CURRENCY`, `UPDATE_RATE`, `VOID_TRANSACTION`, etc.
+
+### End-of-Day Report (`/reports/end-of-day?date=YYYY-MM-DD`)
+**Session summary enriched with totals (admin only).**
+- Combines `getSessionReport` results with aggregate stats:
+  - `totalTransactions` (non-voided), `voidedTransactions`
+  - `totalVolumeGbp`, `totalProfitGbp`
+  - `balances[]` — same rows as Session Report

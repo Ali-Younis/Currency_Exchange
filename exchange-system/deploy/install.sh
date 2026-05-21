@@ -12,13 +12,24 @@
 set -euo pipefail
 
 # ── Configuration — edit these two lines before sharing with customers ────────
-GITHUB_OWNER="Ali-Younis"   # <-- replace with your GitHub username
-GITHUB_REPO="https://github.com/Ali-Younis/Currency_Exchange.git"          # <-- replace with your GitHub repo name
+GITHUB_OWNER="Ali-Younis"   # your GitHub username
+GITHUB_REPO="Currency_Exchange"          # your GitHub repo name
 BRANCH="main"
 # ─────────────────────────────────────────────────────────────────────────────
 
-RAW_BASE="https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/${BRANCH}/deploy"
+RAW_BASE="https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/${BRANCH}/exchange-system/deploy"
 INSTALL_DIR="${INSTALL_DIR:-${HOME}/exchange-manager}"
+
+# Accept GitHub PAT as first argument (required for private repos).
+# Usage:  curl ... | bash -s -- ghp_YOUR_TOKEN
+GH_TOKEN="${1:-${GH_TOKEN:-}}"
+
+# Build curl auth options
+if [[ -n "${GH_TOKEN}" ]]; then
+  gh_curl() { curl -H "Authorization: token ${GH_TOKEN}" "$@"; }
+else
+  gh_curl() { curl "$@"; }
+fi
 
 # ── Terminal colours ──────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -60,9 +71,9 @@ info "Install path: ${BOLD}${INSTALL_DIR}${NC}"
 # ── 3. Download configuration files ──────────────────────────────────────────
 step "Downloading configuration files"
 
-curl -fsSL "${RAW_BASE}/docker-compose.yml" -o docker-compose.yml \
+gh_curl -fsSL "${RAW_BASE}/docker-compose.yml" -o docker-compose.yml \
   || error "Failed to download docker-compose.yml — check your internet connection."
-curl -fsSL "${RAW_BASE}/nginx.conf"         -o nginx.conf \
+gh_curl -fsSL "${RAW_BASE}/nginx.conf"         -o nginx.conf \
   || error "Failed to download nginx.conf."
 
 success "docker-compose.yml and nginx.conf downloaded."
