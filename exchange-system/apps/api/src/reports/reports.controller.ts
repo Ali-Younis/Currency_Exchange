@@ -22,7 +22,7 @@ export class ReportsController {
 
   @Get('session')
   @UseGuards(PermissionsGuard)
-  @RequirePermission('reports')
+  @RequirePermission('reports', 'dashboard')
   getSessionReport(@Query('date') date: string) {
     return this.svc.getSessionReport(date ?? today());
   }

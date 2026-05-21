@@ -28,8 +28,8 @@ export class PermissionsGuard implements CanActivate {
     const dbUser = await this.prisma.user.findUnique({ where: { id: user.sub }, select: { permissions: true } });
     const userPerms = Array.isArray(dbUser?.permissions) ? (dbUser.permissions as string[]) : [];
 
-    const hasAll = required.every((p) => userPerms.includes(p));
-    if (!hasAll) throw new ForbiddenException('You do not have permission to access this resource');
+    const hasAny = required.some((p) => userPerms.includes(p));
+    if (!hasAny) throw new ForbiddenException('You do not have permission to access this resource');
     return true;
   }
 }

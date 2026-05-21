@@ -8,7 +8,6 @@ const INFO_ROWS = [
   { label: 'System Name', value: 'Exchange Manager (RMX2)' },
   { label: 'Version', value: '2.0.0' },
   { label: 'Base Currency', value: 'GBP (£)' },
-  { label: 'Platform', value: 'NestJS API · Next.js UI · PostgreSQL · Redis' },
 ];
 
 function InfoRow({ label, value }: { label: string; value: string }) {

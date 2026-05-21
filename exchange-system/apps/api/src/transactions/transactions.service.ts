@@ -39,6 +39,37 @@ export class TransactionsService {
       }
     }
 
+    const sessionDateObj = new Date(dto.sessionDate);
+
+    // ── Pre-flight balance check (outside transaction so errors propagate as 400) ──
+    {
+      // Carry-forward: get the latest opening balance on or before the session date
+      const openingBalance = await this.prisma.openingBalance.findFirst({
+        where: { currencyId: dto.currencyOutId, sessionDate: { lte: sessionDateObj } },
+        orderBy: { sessionDate: 'desc' },
+      });
+      const [inflowAgg, outflowAgg, currencyOut] = await Promise.all([
+        this.prisma.transaction.aggregate({
+          where: { currencyInId: dto.currencyOutId, isVoided: false, sessionDate: sessionDateObj },
+          _sum: { amountIn: true },
+        }),
+        this.prisma.transaction.aggregate({
+          where: { currencyOutId: dto.currencyOutId, isVoided: false, sessionDate: sessionDateObj },
+          _sum: { amountOut: true },
+        }),
+        this.prisma.currency.findUnique({ where: { id: dto.currencyOutId } }),
+      ]);
+      const opening = new Prisma.Decimal(openingBalance?.amount?.toString() ?? '0');
+      const inflows = new Prisma.Decimal(inflowAgg._sum.amountIn?.toString() ?? '0');
+      const outflows = new Prisma.Decimal(outflowAgg._sum.amountOut?.toString() ?? '0');
+      const available = opening.plus(inflows).minus(outflows);
+      if (available.lt(new Prisma.Decimal(dto.amountOut))) {
+        throw new BadRequestException(
+          `Insufficient ${currencyOut?.code ?? 'currency'} balance: available ${available.toFixed(2)}, required ${dto.amountOut}`,
+        );
+      }
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let createdTx: any = null;
     let valueInGbpForAudit = new Prisma.Decimal(0);
@@ -121,34 +152,6 @@ export class TransactionsService {
           }
 
           valueInGbpForAudit = valueInGbp;
-
-          // ── Balance check: ensure we have enough of currencyOut ───────────────
-          const sessionDateObj = new Date(dto.sessionDate);
-          const [openingBalance, inflowAgg, outflowAgg, currencyOut] = await Promise.all([
-            tx.openingBalance.findFirst({
-              where: { currencyId: dto.currencyOutId, sessionDate: sessionDateObj },
-            }),
-            tx.transaction.aggregate({
-              where: { currencyInId: dto.currencyOutId, isVoided: false, sessionDate: sessionDateObj },
-              _sum: { amountIn: true },
-            }),
-            tx.transaction.aggregate({
-              where: { currencyOutId: dto.currencyOutId, isVoided: false, sessionDate: sessionDateObj },
-              _sum: { amountOut: true },
-            }),
-            tx.currency.findUnique({ where: { id: dto.currencyOutId } }),
-          ]);
-
-          const opening = new Prisma.Decimal(openingBalance?.amount?.toString() ?? '0');
-          const inflows = new Prisma.Decimal(inflowAgg._sum.amountIn?.toString() ?? '0');
-          const outflows = new Prisma.Decimal(outflowAgg._sum.amountOut?.toString() ?? '0');
-          const available = opening.plus(inflows).minus(outflows);
-
-          if (available.lt(new Prisma.Decimal(dto.amountOut))) {
-            throw new BadRequestException(
-              `Insufficient ${currencyOut?.code ?? 'currency'} balance: available ${available.toFixed(2)}, required ${dto.amountOut}`,
-            );
-          }
 
           // ── Create transaction ────────────────────────────────────────────────
           return tx.transaction.create({
