@@ -4,12 +4,8 @@
 #
 # Usage (run on the target machine):
 #
-#   PAT="ghp_YOUR_TOKEN"
-#   curl -H "Authorization: token $PAT" -fsSL \
-#     https://raw.githubusercontent.com/Ali-Younis/Currency_Exchange/main/exchange-system/deploy/install.sh \
-#     | bash -s -- "$PAT"
+#   curl -fsSL https://raw.githubusercontent.com/Ali-Younis/Currency_Exchange/main/exchange-system/deploy/install.sh | bash
 #
-# The PAT needs scopes: read:packages (to pull Docker images from GHCR)
 # Requirements: Docker 24+ with the Compose plugin (docker compose v2).
 # Tested on: Ubuntu 22.04 / 24.04, Debian 12, RHEL 9, macOS 14.
 # ─────────────────────────────────────────────────────────────────────────────

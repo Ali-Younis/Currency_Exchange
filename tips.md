@@ -3,7 +3,4 @@ docker exec -it exchange_postgres psql -U exchange_user -d exchange_db -c "UPDAT
 
 - Command to install the system
 
-PAT="ghp_YOUR_TOKEN"
-curl -H "Authorization: token $PAT" \
-  -fsSL "https://raw.githubusercontent.com/Ali-Younis/Currency_Exchange/main/exchange-system/deploy/install.sh" \
-  | bash -s -- "$PAT"
+curl -fsSL "https://raw.githubusercontent.com/Ali-Younis/Currency_Exchange/main/exchange-system/deploy/install.sh" | bash
