@@ -14,8 +14,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  API_IMAGE: ghcr.io/${{ github.repository_owner }}/exchange-api
-  WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/exchange-web
 
 jobs:
   build-push:
@@ -32,7 +30,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ── 2. Multi-platform support (amd64 + arm64) ──────────────────────────
+      # ── 2. Lowercase owner (Docker registry names must be lowercase) ───────
+      - name: Compute lowercase owner
+        id: owner
+        run: echo "name=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      # ── 3. Multi-platform support (amd64 + arm64) ──────────────────────────
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -51,18 +54,23 @@ jobs:
       - name: Compute tags
         id: tags
         run: |
+          OWNER="${{ steps.owner.outputs.name }}"
+          API_IMAGE="ghcr.io/${OWNER}/exchange-api"
+          WEB_IMAGE="ghcr.io/${OWNER}/exchange-web"
           SHORT_SHA="${GITHUB_SHA::7}"
-          API_TAGS="${{ env.API_IMAGE }}:latest,${{ env.API_IMAGE }}:sha-${SHORT_SHA}"
-          WEB_TAGS="${{ env.WEB_IMAGE }}:latest,${{ env.WEB_IMAGE }}:sha-${SHORT_SHA}"
+          API_TAGS="${API_IMAGE}:latest,${API_IMAGE}:sha-${SHORT_SHA}"
+          WEB_TAGS="${WEB_IMAGE}:latest,${WEB_IMAGE}:sha-${SHORT_SHA}"
 
           if [[ -n "${{ github.event.inputs.tag }}" ]]; then
-            API_TAGS="${API_TAGS},${{ env.API_IMAGE }}:${{ github.event.inputs.tag }}"
-            WEB_TAGS="${WEB_TAGS},${{ env.WEB_IMAGE }}:${{ github.event.inputs.tag }}"
+            API_TAGS="${API_TAGS},${API_IMAGE}:${{ github.event.inputs.tag }}"
+            WEB_TAGS="${WEB_TAGS},${WEB_IMAGE}:${{ github.event.inputs.tag }}"
           fi
 
-          echo "api_tags=${API_TAGS}"   >> "$GITHUB_OUTPUT"
-          echo "web_tags=${WEB_TAGS}"   >> "$GITHUB_OUTPUT"
-          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "api_tags=${API_TAGS}"         >> "$GITHUB_OUTPUT"
+          echo "web_tags=${WEB_TAGS}"         >> "$GITHUB_OUTPUT"
+          echo "api_image=${API_IMAGE}"       >> "$GITHUB_OUTPUT"
+          echo "web_image=${WEB_IMAGE}"       >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}"       >> "$GITHUB_OUTPUT"
 
       # ── 5. Build & push — NestJS API ──────────────────────────────────────
       - name: Build & push API image
@@ -103,5 +111,5 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Image | Tags |" >> "$GITHUB_STEP_SUMMARY"
           echo "|-------|------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| \`${{ env.API_IMAGE }}\` | \`latest\`, \`sha-${{ steps.tags.outputs.short_sha }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| \`${{ env.WEB_IMAGE }}\` | \`latest\`, \`sha-${{ steps.tags.outputs.short_sha }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| \`${{ steps.tags.outputs.api_image }}\` | \`latest\`, \`sha-${{ steps.tags.outputs.short_sha }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| \`${{ steps.tags.outputs.web_image }}\` | \`latest\`, \`sha-${{ steps.tags.outputs.short_sha }}\` |" >> "$GITHUB_STEP_SUMMARY"
