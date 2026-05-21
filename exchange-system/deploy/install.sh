@@ -4,10 +4,12 @@
 #
 # Usage (run on the target machine):
 #
-#   curl -H "Authorization: token YOUR_PAT" -fsSL \
+#   PAT="ghp_YOUR_TOKEN"
+#   curl -H "Authorization: token $PAT" -fsSL \
 #     https://raw.githubusercontent.com/Ali-Younis/Currency_Exchange/main/exchange-system/deploy/install.sh \
-#     | bash
+#     | bash -s -- "$PAT"
 #
+# The PAT needs scopes: read:packages (to pull Docker images from GHCR)
 # Requirements: Docker 24+ with the Compose plugin (docker compose v2).
 # Tested on: Ubuntu 22.04 / 24.04, Debian 12, RHEL 9, macOS 14.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -16,6 +18,9 @@ set -euo pipefail
 # ── Configuration ─────────────────────────────────────────────────────────────
 GITHUB_OWNER="Ali-Younis"
 INSTALL_DIR="${INSTALL_DIR:-${HOME}/exchange-manager}"
+
+# PAT passed as first argument (required when running via curl | bash -s -- PAT)
+GH_PAT="${1:-}"
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Terminal colours ──────────────────────────────────────────────────────────
@@ -304,15 +309,24 @@ step "Container registry authentication"
 if docker manifest inspect "ghcr.io/${GITHUB_OWNER}/exchange-api:latest" &>/dev/null 2>&1; then
   success "Images are publicly accessible — no login required."
 else
-  echo ""
-  warn "Images are private. You need a GitHub Personal Access Token (PAT)"
-  warn "with the  read:packages  scope to pull them."
-  echo ""
-  echo -e "  Create a PAT at: ${BOLD}https://github.com/settings/tokens${NC}"
-  echo -e "  Then enter it below (input is hidden):"
-  echo ""
-  read -r -s -p "  GitHub PAT: " GH_PAT
-  echo ""
+  if [[ -z "${GH_PAT}" ]]; then
+    # Only prompt interactively if we have a real TTY (i.e. not piped)
+    if [[ -t 0 ]]; then
+      echo ""
+      warn "Images are private. You need a GitHub Personal Access Token (PAT)"
+      warn "with the  read:packages  scope to pull them."
+      echo ""
+      echo -e "  Create a PAT at: ${BOLD}https://github.com/settings/tokens${NC}"
+      echo -e "  Then enter it below (input is hidden):"
+      echo ""
+      read -r -s -p "  GitHub PAT: " GH_PAT
+      echo ""
+    else
+      error "Images are private but no PAT was provided. Re-run with your token:\n\n  PAT=\"ghp_YOUR_TOKEN\"\n  curl -H \"Authorization: token \$PAT\" -fsSL ...install.sh | bash -s -- \"\$PAT\""
+    fi
+  else
+    info "Using provided PAT for GHCR login."
+  fi
   echo "${GH_PAT}" | docker login ghcr.io -u "${GITHUB_OWNER}" --password-stdin \
     || error "GHCR login failed. Check your PAT and that it has 'read:packages' scope."
   success "Logged in to ghcr.io."
