@@ -28,7 +28,7 @@ jobs:
     steps:
       # ── 1. Checkout source ─────────────────────────────────────────────────
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
 
       # ── 2. Lowercase owner (Docker registry names must be lowercase) ───────
       - name: Compute lowercase owner
@@ -37,14 +37,14 @@ jobs:
 
       # ── 3. Multi-platform support (amd64 + arm64) ──────────────────────────
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v3.6.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v3.10.0
 
       # ── 3. Authenticate to GHCR ────────────────────────────────────────────
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v3.4.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -74,7 +74,7 @@ jobs:
 
       # ── 5. Build & push — NestJS API ──────────────────────────────────────
       - name: Build & push API image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6.16.0
         with:
           context: ./exchange-system
           file: ./exchange-system/apps/api/Dockerfile
@@ -90,7 +90,7 @@ jobs:
 
       # ── 6. Build & push — Next.js Web ─────────────────────────────────────
       - name: Build & push Web image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6.16.0
         with:
           context: ./exchange-system
           file: ./exchange-system/apps/web/Dockerfile
