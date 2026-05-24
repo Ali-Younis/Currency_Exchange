@@ -457,7 +457,14 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
           const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
           const buffer = await downloadReceiptPdf(tx, type, commSnapshot, { returnBuffer: true, cashierName: user?.receiptAlias ?? user?.fullName ?? '' });
           if (buffer && token) {
-            const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer as ArrayBuffer)));
+            // Chunked encoding avoids "Maximum call stack size exceeded" for large PDFs
+            const bytes = new Uint8Array(buffer as ArrayBuffer);
+            const CHUNK = 8192;
+            const parts: string[] = [];
+            for (let i = 0; i < bytes.length; i += CHUNK) {
+              parts.push(String.fromCharCode(...bytes.subarray(i, i + CHUNK)));
+            }
+            const base64 = btoa(parts.join(''));
             await fetch(`/api/v1/transactions/${tx.id}/save-pdf`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },

@@ -39,6 +39,22 @@ async function setSetting(key: string, value: string): Promise<void> {
   });
 }
 
+/** Convert a stored UTC "HH:MM" string to the browser's local "HH:MM" for display */
+function utcTimeToLocal(utcHHMM: string): string {
+  const [h, m] = utcHHMM.split(':').map(Number);
+  const d = new Date();
+  d.setUTCHours(h, m, 0, 0);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/** Convert a browser-local "HH:MM" string to UTC "HH:MM" for storage */
+function localTimeToUtc(localHHMM: string): string {
+  const [h, m] = localHHMM.split(':').map(Number);
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+}
+
 export default function SettingsPage() {
   const [locale, setLocale] = useState<Locale>('en');
 
@@ -83,6 +99,17 @@ export default function SettingsPage() {
   const [pdfDirSaving, setPdfDirSaving] = useState(false);
   const [pdfDirMsg, setPdfDirMsg] = useState('');
 
+  // PDF file browser
+  type StoredFile = { name: string; size: number; modifiedAt: string };
+  const [pdfFiles, setPdfFiles] = useState<StoredFile[]>([]);
+  const [pdfFilesLoading, setPdfFilesLoading] = useState(false);
+  const [pdfFilesMsg, setPdfFilesMsg] = useState('');
+
+  // Backup file browser
+  const [backupFiles, setBackupFiles] = useState<StoredFile[]>([]);
+  const [backupFilesLoading, setBackupFilesLoading] = useState(false);
+  const [backupFilesMsg, setBackupFilesMsg] = useState('');
+
   useEffect(() => {
     const stored = getCookie('locale') as Locale | undefined;
     if (stored === 'en' || stored === 'ar') setLocale(stored);
@@ -118,7 +145,7 @@ export default function SettingsPage() {
       .then((r) => r.ok ? r.json() : null)
       .then((d) => {
         if (d) {
-          setBackupConfig({ directory: d.directory, autoTime: d.autoTime, autoEnabled: d.autoEnabled });
+          setBackupConfig({ directory: d.directory, autoTime: d.autoTime ? utcTimeToLocal(d.autoTime) : '02:00', autoEnabled: d.autoEnabled });
           if (d.lastRun) setBackupLastRun(d.lastRun);
           if (d.lastStatus) setBackupLastStatus(d.lastStatus);
         }
@@ -265,7 +292,8 @@ export default function SettingsPage() {
       await fetch(`${API}/backup/config`, {
         method: 'PUT',
         headers: authHeaders(),
-        body: JSON.stringify(backupConfig),
+        // Convert user-entered local time to UTC before storing
+        body: JSON.stringify({ ...backupConfig, autoTime: localTimeToUtc(backupConfig.autoTime) }),
       });
       setBackupMsg('Auto-backup settings saved.');
     } catch { setBackupMsg('Failed to save backup settings.'); }
@@ -305,6 +333,95 @@ export default function SettingsPage() {
     await setSetting('pdf_save_directory', pdfDir);
     setPdfDirMsg('PDF save directory saved.');
     setPdfDirSaving(false);
+  }
+
+  async function loadPdfFiles() {
+    setPdfFilesLoading(true);
+    setPdfFilesMsg('');
+    try {
+      const r = await fetch(`${API}/backup/pdf-files`, { headers: authHeaders() });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      setPdfFiles(await r.json());
+    } catch (err) {
+      setPdfFilesMsg(`Failed to load files: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+    setPdfFilesLoading(false);
+  }
+
+  async function deletePdfFile(filename: string) {
+    if (!confirm(`Delete "${filename}"? This cannot be undone.`)) return;
+    try {
+      const r = await fetch(`${API}/backup/pdf-files/${encodeURIComponent(filename)}`, { method: 'DELETE', headers: authHeaders() });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      setPdfFiles((prev) => prev.filter((f) => f.name !== filename));
+    } catch (err) {
+      setPdfFilesMsg(`Delete failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }
+
+  function downloadPdfFile(filename: string) {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const url = `${API}/backup/pdf-files/${encodeURIComponent(filename)}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    // Attach token via a fetch-blob approach
+    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.blob())
+      .then((blob) => {
+        const blobUrl = URL.createObjectURL(blob);
+        a.href = blobUrl;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(blobUrl);
+      })
+      .catch(() => { setPdfFilesMsg('Download failed.'); });
+  }
+
+  async function loadBackupFiles() {
+    setBackupFilesLoading(true);
+    setBackupFilesMsg('');
+    try {
+      const r = await fetch(`${API}/backup/stored-files`, { headers: authHeaders() });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      setBackupFiles(await r.json());
+    } catch (err) {
+      setBackupFilesMsg(`Failed to load files: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+    setBackupFilesLoading(false);
+  }
+
+  async function deleteBackupFile(filename: string) {
+    if (!confirm(`Delete "${filename}"? This cannot be undone.`)) return;
+    try {
+      const r = await fetch(`${API}/backup/stored-files/${encodeURIComponent(filename)}`, { method: 'DELETE', headers: authHeaders() });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      setBackupFiles((prev) => prev.filter((f) => f.name !== filename));
+    } catch (err) {
+      setBackupFilesMsg(`Delete failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }
+
+  function downloadBackupFile(filename: string) {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const url = `${API}/backup/stored-files/${encodeURIComponent(filename)}`;
+    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.blob())
+      .then((blob) => {
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(blobUrl);
+      })
+      .catch(() => { setBackupFilesMsg('Download failed.'); });
+  }
+
+  function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
   return (
@@ -348,8 +465,15 @@ export default function SettingsPage() {
               type="file"
               accept="image/*"
               onChange={handleLogoFile}
-              className="text-sm text-gray-600"
+              className="hidden"
             />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="px-4 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:border-[#0a146e] hover:text-[#0a146e]"
+            >
+              Choose File
+            </button>
             <button
               onClick={saveLogo}
               disabled={!logoPreview || logoSaving}
@@ -357,11 +481,6 @@ export default function SettingsPage() {
             >
               {logoSaving ? 'Saving…' : 'Save Logo'}
             </button>
-            {logoPreview && (
-              <button onClick={removeLogo} className="px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-600">
-                Remove
-              </button>
-            )}
           </div>
           {logoMsg && (
             <p className={`text-xs mt-2 ${logoMsg.startsWith('Failed') ? 'text-red-500' : 'text-green-600'}`}>
@@ -564,13 +683,18 @@ export default function SettingsPage() {
                 </button>
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Backup Time (daily)</label>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Backup Time — your local time
+                </label>
                 <input
                   type="time"
                   value={backupConfig.autoTime}
                   onChange={(e) => setBackupConfig((c) => ({ ...c, autoTime: e.target.value }))}
                   className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]"
                 />
+                <p className="text-xs text-gray-400 mt-1">
+                  Stored as UTC {backupConfig.autoTime ? localTimeToUtc(backupConfig.autoTime) : '--:--'} — enter in your local time, DST is handled automatically.
+                </p>
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Save Directory (server path)</label>
@@ -616,6 +740,64 @@ export default function SettingsPage() {
             <p className="text-xs text-gray-400 mt-2">
               Backup files are saved to the Docker volume. Use the &apos;Download Backup&apos; button above to export and save a copy locally.
             </p>
+
+            {/* Backup file browser */}
+            <div className="mt-6 border-t border-gray-100 pt-5">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-medium text-gray-700">Stored Backup Files</p>
+                <button
+                  onClick={loadBackupFiles}
+                  disabled={backupFilesLoading}
+                  className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-600 hover:border-[#0a146e] hover:text-[#0a146e] disabled:opacity-50"
+                >
+                  {backupFilesLoading ? 'Loading…' : '↻ Refresh'}
+                </button>
+              </div>
+              {backupFilesMsg && <p className="text-xs mb-2 text-red-500">{backupFilesMsg}</p>}
+              {backupFiles.length === 0 && !backupFilesLoading ? (
+                <p className="text-xs text-gray-400 italic">Click Refresh to load backup files from the server.</p>
+              ) : (
+                <div className="border border-gray-100 rounded-lg overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50 text-gray-500">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-medium">File Name</th>
+                        <th className="text-right px-3 py-2 font-medium">Size</th>
+                        <th className="text-right px-3 py-2 font-medium">Date</th>
+                        <th className="text-right px-3 py-2 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {backupFiles.map((file) => (
+                        <tr key={file.name} className="border-t border-gray-100 hover:bg-gray-50">
+                          <td className="px-3 py-2 font-mono text-gray-700 truncate max-w-[180px]">{file.name}</td>
+                          <td className="px-3 py-2 text-right text-gray-500">{formatBytes(file.size)}</td>
+                          <td className="px-3 py-2 text-right text-gray-500 whitespace-nowrap">
+                            {new Date(file.modifiedAt).toLocaleDateString()}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => downloadBackupFile(file.name)}
+                                className="px-2 py-1 text-[#0a146e] border border-[#0a146e] rounded text-xs hover:bg-[#0a146e] hover:text-white"
+                              >
+                                ⬇ Download
+                              </button>
+                              <button
+                                onClick={() => deleteBackupFile(file.name)}
+                                className="px-2 py-1 text-red-600 border border-red-300 rounded text-xs hover:bg-red-50"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -646,6 +828,64 @@ export default function SettingsPage() {
             {pdfDirSaving ? 'Saving…' : 'Save PDF Directory'}
           </button>
           {pdfDirMsg && <p className="text-xs mt-2 text-green-600">{pdfDirMsg}</p>}
+
+          {/* PDF file browser */}
+          <div className="mt-6 border-t border-gray-100 pt-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-medium text-gray-700">Stored PDF Receipts</p>
+              <button
+                onClick={loadPdfFiles}
+                disabled={pdfFilesLoading}
+                className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-600 hover:border-[#0a146e] hover:text-[#0a146e] disabled:opacity-50"
+              >
+                {pdfFilesLoading ? 'Loading…' : '↻ Refresh'}
+              </button>
+            </div>
+            {pdfFilesMsg && <p className="text-xs mb-2 text-red-500">{pdfFilesMsg}</p>}
+            {pdfFiles.length === 0 && !pdfFilesLoading ? (
+              <p className="text-xs text-gray-400 italic">Click Refresh to load files from the server.</p>
+            ) : (
+              <div className="border border-gray-100 rounded-lg overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 text-gray-500">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-medium">File Name</th>
+                      <th className="text-right px-3 py-2 font-medium">Size</th>
+                      <th className="text-right px-3 py-2 font-medium">Date</th>
+                      <th className="text-right px-3 py-2 font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pdfFiles.map((file) => (
+                      <tr key={file.name} className="border-t border-gray-100 hover:bg-gray-50">
+                        <td className="px-3 py-2 font-mono text-gray-700 truncate max-w-[180px]">{file.name}</td>
+                        <td className="px-3 py-2 text-right text-gray-500">{formatBytes(file.size)}</td>
+                        <td className="px-3 py-2 text-right text-gray-500 whitespace-nowrap">
+                          {new Date(file.modifiedAt).toLocaleDateString()}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => downloadPdfFile(file.name)}
+                              className="px-2 py-1 text-[#0a146e] border border-[#0a146e] rounded text-xs hover:bg-[#0a146e] hover:text-white"
+                            >
+                              ⬇ View
+                            </button>
+                            <button
+                              onClick={() => deletePdfFile(file.name)}
+                              className="px-2 py-1 text-red-600 border border-red-300 rounded text-xs hover:bg-red-50"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </AppShell>

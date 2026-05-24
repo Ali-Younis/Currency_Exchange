@@ -124,6 +124,62 @@ export class BackupService {
     return filepath;
   }
 
+  async listBackupFiles(): Promise<{ name: string; size: number; modifiedAt: string }[]> {
+    const dir = (await this.settings.get('backup_directory')) ?? '/app/backups';
+    if (!fs.existsSync(dir)) return [];
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json') && /^[a-zA-Z0-9._-]+$/.test(f));
+    return files
+      .map((name) => {
+        const stat = fs.statSync(path.join(dir, name));
+        return { name, size: stat.size, modifiedAt: stat.mtime.toISOString() };
+      })
+      .sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+  }
+
+  async resolveBackupFilePath(filename: string): Promise<string | null> {
+    if (!/^[a-zA-Z0-9._-]+$/.test(filename)) return null;
+    const dir = path.resolve((await this.settings.get('backup_directory')) ?? '/app/backups');
+    const full = path.join(dir, filename);
+    if (!full.startsWith(dir + path.sep) && full !== dir) return null;
+    if (!fs.existsSync(full)) return null;
+    return full;
+  }
+
+  async deleteBackupFile(filename: string): Promise<boolean> {
+    const full = await this.resolveBackupFilePath(filename);
+    if (!full) return false;
+    fs.unlinkSync(full);
+    return true;
+  }
+
+  async listPdfFiles(): Promise<{ name: string; size: number; modifiedAt: string }[]> {
+    const dir = (await this.settings.get('pdf_save_directory')) ?? '/app/pdf-receipts';
+    if (!fs.existsSync(dir)) return [];
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.pdf') && /^[a-zA-Z0-9._-]+$/.test(f));
+    return files
+      .map((name) => {
+        const stat = fs.statSync(path.join(dir, name));
+        return { name, size: stat.size, modifiedAt: stat.mtime.toISOString() };
+      })
+      .sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+  }
+
+  async resolvePdfFilePath(filename: string): Promise<string | null> {
+    if (!/^[a-zA-Z0-9._-]+$/.test(filename)) return null;
+    const dir = path.resolve((await this.settings.get('pdf_save_directory')) ?? '/app/pdf-receipts');
+    const full = path.join(dir, filename);
+    if (!full.startsWith(dir + path.sep) && full !== dir) return null;
+    if (!fs.existsSync(full)) return null;
+    return full;
+  }
+
+  async deletePdfFile(filename: string): Promise<boolean> {
+    const full = await this.resolvePdfFilePath(filename);
+    if (!full) return false;
+    fs.unlinkSync(full);
+    return true;
+  }
+
   /** Runs every minute and triggers backup once per day at or after the configured time. */
   @Cron('* * * * *')
   async scheduledBackupCheck(): Promise<void> {
@@ -136,21 +192,22 @@ export class BackupService {
     const now = new Date();
     const [configHour, configMin] = configTime.split(':').map(Number);
     const configMinutes = configHour * 60 + configMin;
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    // Always compare in UTC — the stored time is saved as UTC from the frontend
+    const currentMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
 
-    // Fire only after the configured time is reached (within a 10-minute grace window)
-    if (currentMinutes < configMinutes || currentMinutes > configMinutes + 9) return;
+    // Only fire once the configured UTC time has been reached for today
+    if (currentMinutes < configMinutes) return;
 
-    // Skip if a backup has already been taken today (prevents duplicate runs)
-    const lastRun = await this.settings.get('backup_last_run');
-    const today = now.toISOString().slice(0, 10); // YYYY-MM-DD (UTC date)
-    if (lastRun && new Date(lastRun).toISOString().slice(0, 10) === today) {
-      return;
-    }
+    // Use a dedicated key so that manual "Run Now" never blocks the scheduled run
+    const lastScheduledDate = await this.settings.get('backup_last_scheduled_date');
+    const todayUTC = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`;
+    if (lastScheduledDate === todayUTC) return;
 
     try {
       const filepath = await this.backupToFile();
       this.logger.log(`Scheduled backup completed: ${filepath}`);
+      // Record that the scheduled backup ran today (separate from manual Run Now)
+      await this.settings.set('backup_last_scheduled_date', todayUTC);
     } catch (err) {
       this.logger.error('Scheduled backup failed', err);
       await Promise.all([

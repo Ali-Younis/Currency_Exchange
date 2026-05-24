@@ -1,6 +1,9 @@
 import {
-  Controller, Get, Post, Put, Body, HttpCode, HttpStatus, UseGuards, StreamableFile, Header,
+  Controller, Get, Post, Put, Delete, Body, Param, HttpCode, HttpStatus, UseGuards,
+  StreamableFile, Header, NotFoundException, Res,
 } from '@nestjs/common';
+import { Response } from 'express';
+import * as fs from 'fs';
 import { BackupService, BackupData } from './backup.service';
 import { AppSettingsService } from '../app-settings/app-settings.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -91,5 +94,55 @@ export class BackupController {
     if (dto.autoTime !== undefined) ops.push(this.settings.set('backup_auto_time', dto.autoTime));
     if (dto.autoEnabled !== undefined) ops.push(this.settings.set('backup_auto_enabled', String(dto.autoEnabled)));
     await Promise.all(ops);
+  }
+
+  /** List backup JSON files stored on disk */
+  @Get('stored-files')
+  listBackupFiles() {
+    return this.backupService.listBackupFiles();
+  }
+
+  /** Download a specific backup file from disk */
+  @Get('stored-files/:filename')
+  async downloadBackupFile(@Param('filename') filename: string, @Res() res: Response) {
+    const filepath = await this.backupService.resolveBackupFilePath(filename);
+    if (!filepath) throw new NotFoundException('File not found');
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    fs.createReadStream(filepath).pipe(res);
+  }
+
+  /** Delete a specific backup file from disk */
+  @Delete('stored-files/:filename')
+  @HttpCode(HttpStatus.OK)
+  async deleteBackupFile(@Param('filename') filename: string) {
+    const deleted = await this.backupService.deleteBackupFile(filename);
+    if (!deleted) throw new NotFoundException('File not found');
+    return { deleted: true };
+  }
+
+  /** List PDF receipt files stored on disk */
+  @Get('pdf-files')
+  listPdfFiles() {
+    return this.backupService.listPdfFiles();
+  }
+
+  /** Download a specific PDF receipt file from disk */
+  @Get('pdf-files/:filename')
+  async downloadPdfFile(@Param('filename') filename: string, @Res() res: Response) {
+    const filepath = await this.backupService.resolvePdfFilePath(filename);
+    if (!filepath) throw new NotFoundException('File not found');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    fs.createReadStream(filepath).pipe(res);
+  }
+
+  /** Delete a specific PDF receipt file from disk */
+  @Delete('pdf-files/:filename')
+  @HttpCode(HttpStatus.OK)
+  async deletePdfFile(@Param('filename') filename: string) {
+    const deleted = await this.backupService.deletePdfFile(filename);
+    if (!deleted) throw new NotFoundException('File not found');
+    return { deleted: true };
   }
 }
