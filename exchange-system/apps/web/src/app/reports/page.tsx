@@ -8,11 +8,9 @@ import { useState } from 'react';
 import api from '@/lib/api';
 import type {
   SessionReport,
-  ProfitReport,
   VolumeReport,
   TopCustomersReport,
   RateHistoryReport,
-  EndOfDayReport,
 } from '@exchange/shared';
 import {
   BarChart,
@@ -60,7 +58,7 @@ const thirtyDaysAgo = () => {
 
 import { countryFlag } from '@/components/CurrencyLabel';
 
-type Tab = 'session' | 'profit' | 'volume' | 'customers' | 'rates' | 'audit' | 'eod';
+type Tab = 'session' | 'volume' | 'customers' | 'rates' | 'audit';
 
 // ─── small shared components ──────────────────────────────────────────────────
 
@@ -194,12 +192,6 @@ function SessionTab() {
         >
           {t('exportExcel')}
         </button>
-        <button
-          onClick={() => window.print()}
-          className="border border-gray-300 text-gray-700 text-sm px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          {t('print')}
-        </button>
       </div>
 
       {isLoading ? (
@@ -257,112 +249,7 @@ function SessionTab() {
   );
 }
 
-// ─── Tab: P&L Analysis ────────────────────────────────────────────────────────
-
-function ProfitTab() {
-  const t = useTranslations('report');
-  const [startDate, setStartDate] = useState(thirtyDaysAgo());
-  const [endDate, setEndDate] = useState(today());
-
-  const { data, isLoading } = useQuery<ProfitReport>({
-    queryKey: ['profit-report', startDate, endDate],
-    queryFn: () =>
-      api.get(`/reports/profit?startDate=${startDate}&endDate=${endDate}`).then((r) => r.data),
-  });
-
-  async function handleExportExcel() {
-    const XLSX = await import('xlsx');
-    const ws = XLSX.utils.json_to_sheet(
-      data?.rows.map((r) => ({
-        Currency: r.currencyCode,
-        Transactions: r.totalTransactions,
-        'Volume GBP': r.totalVolumeGbp,
-        'Profit GBP': r.totalProfitGbp,
-        'Avg Profit/Txn': r.avgProfitPerTxnGbp,
-      })) ?? [],
-    );
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'P&L');
-    XLSX.writeFile(wb, `pl-report-${startDate}-to-${endDate}.xlsx`);
-  }
-
-  return (
-    <div>
-      <DateRangeBar
-        startDate={startDate}
-        endDate={endDate}
-        onStart={setStartDate}
-        onEnd={setEndDate}
-      />
-
-      {isLoading ? (
-        <Spinner />
-      ) : (
-        <>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-            <KpiCard
-              label={t('totalProfit')}
-              value={`£${parseFloat(data?.grandTotalProfitGbp ?? '0').toFixed(2)}`}
-            />
-            <KpiCard
-              label={t('totalVolume')}
-              value={`£${parseFloat(data?.grandTotalVolumeGbp ?? '0').toLocaleString()}`}
-            />
-          </div>
-
-          <div className="flex justify-end mb-3">
-            <button
-              onClick={handleExportExcel}
-              className="bg-green-700 text-white text-sm px-4 py-2 rounded-lg hover:bg-green-800 transition-colors"
-            >
-              {t('exportExcel')}
-            </button>
-          </div>
-
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-[#0a146e] text-white text-xs uppercase">
-                  <th className="text-left px-5 py-4">{t('currency')}</th>
-                  <th className="text-right px-5 py-4">{t('transactions')}</th>
-                  <th className="text-right px-5 py-4">{t('totalVolume')}</th>
-                  <th className="text-right px-5 py-4">{t('totalProfit')}</th>
-                  <th className="text-right px-5 py-4">{t('avgProfit')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data?.rows.map((row) => (
-                  <tr key={row.currencyId} className="border-t border-gray-100 hover:bg-gray-50">
-                    <td className="px-5 py-3 font-bold text-gray-900">{row.currencyCode}</td>
-                    <td className="px-5 py-3 text-right">{row.totalTransactions}</td>
-                    <td className="px-5 py-3 text-right text-gray-700">
-                      £{parseFloat(row.totalVolumeGbp).toLocaleString()}
-                    </td>
-                    <td className="px-5 py-3 text-right text-green-600 font-semibold">
-                      £{parseFloat(row.totalProfitGbp).toFixed(2)}
-                    </td>
-                    <td className="px-5 py-3 text-right text-gray-500">
-                      £{parseFloat(row.avgProfitPerTxnGbp).toFixed(4)}
-                    </td>
-                  </tr>
-                ))}
-                {!data?.rows.length && (
-                  <tr>
-                    <td colSpan={5} className="text-center text-gray-400 py-12">
-                      No data for selected range
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-// ─── Tab: Volume Trends ───────────────────────────────────────────────────────
+// ─── Tab: Transaction Trends ─────────────────────────────────────────────────
 
 function VolumeTab() {
   const t = useTranslations('report');
@@ -378,18 +265,20 @@ function VolumeTab() {
         .then((r) => r.data),
   });
 
-  const volDomain = useMemo(
-    () => chartDomain((data?.trendPoints ?? []).map((p) => parseFloat(p.volumeGbp)), true),
-    [data],
-  );
   const cntDomain = useMemo(
-    () => chartDomain((data?.trendPoints ?? []).map((p) => Number(p.count)), true),
+    () => {
+      const vals = (data?.trendPoints ?? []).map((p) => Number(p.count));
+      if (!vals.length) return [0, 10] as [number, number];
+      const max = Math.max(...vals);
+      return [0, Math.max(1, Math.ceil(max * 1.1))] as [number, number];
+    },
     [data],
   );
   const buysDomain = useMemo(
     () => chartDomain([
       ...(data?.trendPoints ?? []).map((p) => Number(p.buys)),
       ...(data?.trendPoints ?? []).map((p) => Number(p.sells)),
+      ...(data?.trendPoints ?? []).map((p) => Number(p.crosses)),
     ], true),
     [data],
   );
@@ -434,9 +323,9 @@ function VolumeTab() {
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-6">
-            <h3 className="text-sm font-semibold text-gray-700 mb-4">Transaction Volume (GBP)</h3>
+            <h3 className="text-sm font-semibold text-gray-700 mb-4"># Transactions Over Time</h3>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={data?.trendPoints ?? []} margin={{ top: 10, right: 60, left: 10, bottom: 5 }}>
+              <LineChart data={data?.trendPoints ?? []} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                 <XAxis
                   dataKey="date"
@@ -445,37 +334,23 @@ function VolumeTab() {
                   minTickGap={40}
                 />
                 <YAxis
-                  yAxisId="left"
-                  tick={{ fontSize: 11 }}
-                  domain={volDomain}
-                  tickCount={6}
-                  tickFormatter={(v) => `£${Number(v).toLocaleString()}`}
-                  width={80}
-                />
-                <YAxis
-                  yAxisId="right"
-                  orientation="right"
                   tick={{ fontSize: 11 }}
                   domain={cntDomain}
-                  tickCount={niceTickCount(cntDomain)}
+                  tickCount={Math.min(6, cntDomain[1] + 1)}
                   allowDecimals={false}
                   width={40}
                 />
                 <Tooltip
                   labelFormatter={dateLabelFmt}
-                  formatter={(v: number, name: string) =>
-                    name === 'Volume (GBP)' ? [`£${Number(v).toLocaleString()}`, name] : [v, name]
-                  }
                 />
                 <Legend />
-                <Line yAxisId="left" type="monotone" dataKey="volumeGbp" name="Volume (GBP)" stroke="#0a146e" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-                <Line yAxisId="right" type="monotone" dataKey="count" name="# Transactions" stroke="#f59e0b" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                <Line type="monotone" dataKey="count" name="# Transactions" stroke="#f59e0b" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-            <h3 className="text-sm font-semibold text-gray-700 mb-4">Buys vs Sells</h3>
+            <h3 className="text-sm font-semibold text-gray-700 mb-4">Buy vs Sell vs Cross-Currency</h3>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={data?.trendPoints ?? []} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
@@ -496,6 +371,7 @@ function VolumeTab() {
                 <Legend />
                 <Bar dataKey="buys" name="Buys" fill="#22c55e" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="sells" name="Sells" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="crosses" name="Cross-Currency" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -527,8 +403,6 @@ function CustomersTab() {
         Rank: c.rank,
         Customer: c.customerName,
         Transactions: c.totalTransactions,
-        'Volume GBP': c.totalVolumeGbp,
-        'Profit GBP': c.totalProfitGbp,
       })) ?? [],
     );
     const wb = XLSX.utils.book_new();
@@ -565,8 +439,6 @@ function CustomersTab() {
                   <th className="text-center px-4 py-4 w-12">{t('rank')}</th>
                   <th className="text-left px-5 py-4">{t('customer')}</th>
                   <th className="text-right px-5 py-4">{t('transactions')}</th>
-                  <th className="text-right px-5 py-4">{t('totalVolume')}</th>
-                  <th className="text-right px-5 py-4">{t('totalProfit')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -589,17 +461,11 @@ function CustomersTab() {
                     </td>
                     <td className="px-5 py-3 font-medium text-gray-900">{c.customerName}</td>
                     <td className="px-5 py-3 text-right">{c.totalTransactions}</td>
-                    <td className="px-5 py-3 text-right text-gray-700">
-                      £{parseFloat(c.totalVolumeGbp).toLocaleString()}
-                    </td>
-                    <td className="px-5 py-3 text-right text-green-600 font-semibold">
-                      £{parseFloat(c.totalProfitGbp).toFixed(2)}
-                    </td>
                   </tr>
                 ))}
                 {!data?.customers.length && (
                   <tr>
-                    <td colSpan={5} className="text-center text-gray-400 py-12">
+                    <td colSpan={3} className="text-center text-gray-400 py-12">
                       No data for selected range
                     </td>
                   </tr>
@@ -781,6 +647,24 @@ function AuditTab() {
         .then((r) => r.data),
   });
 
+  async function handleExportExcel() {
+    const XLSX = await import('xlsx');
+    const allData = await api
+      .get(`/reports/audit?startDate=${startDate}&endDate=${endDate}&action=${action}&page=1&pageSize=5000`)
+      .then((r) => r.data);
+    const rows = (allData?.data ?? []).map((row: { createdAt: string; user?: { fullName: string }; userId?: string; action: string; entity?: string; entityId?: string; ipAddress?: string }) => ({
+      Timestamp: new Date(row.createdAt).toLocaleString(),
+      User: row.user?.fullName ?? row.userId ?? '—',
+      Action: row.action,
+      Entity: row.entity ? `${row.entity}${row.entityId ? ` #${row.entityId.slice(0, 8)}` : ''}` : '—',
+      'IP Address': row.ipAddress ?? '—',
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Audit Trail');
+    XLSX.writeFile(wb, `audit-trail-${startDate}-to-${endDate}.xlsx`);
+  }
+
   return (
     <div>
       <DateRangeBar
@@ -802,6 +686,14 @@ function AuditTab() {
         <Spinner />
       ) : (
         <>
+          <div className="flex justify-end mb-3">
+            <button
+              onClick={handleExportExcel}
+              className="bg-green-700 text-white text-sm px-4 py-2 rounded-lg hover:bg-green-800 transition-colors"
+            >
+              {t('exportExcel')}
+            </button>
+          </div>
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <table className="w-full text-sm">
               <thead>
@@ -874,140 +766,14 @@ function AuditTab() {
   );
 }
 
-// ─── Tab: End of Day ─────────────────────────────────────────────────────────
-
-function EndOfDayTab() {
-  const t = useTranslations('report');
-  const [date, setDate] = useState(today());
-
-  const { data, isLoading } = useQuery<EndOfDayReport>({
-    queryKey: ['eod-report', date],
-    queryFn: () => api.get(`/reports/end-of-day?date=${date}`).then((r) => r.data),
-  });
-
-  async function handleExportPdf() {
-    const { default: jsPDF } = await import('jspdf');
-    const { default: autoTable } = await import('jspdf-autotable');
-    const doc = new jsPDF();
-    doc.setFontSize(14);
-    doc.text(`End of Day Report – ${date}`, 14, 20);
-    doc.setFontSize(11);
-    doc.text(`Total Transactions: ${data?.totalTransactions}`, 14, 32);
-    doc.text(`Total Volume (GBP): £${data?.totalVolumeGbp}`, 14, 40);
-    doc.text(`Total Profit (GBP): £${data?.totalProfitGbp}`, 14, 48);
-    autoTable(doc, {
-      startY: 58,
-      head: [['Currency', 'Opening', 'Buys', 'Sells', 'Closing']],
-      body:
-        data?.balances.map((r) => [
-          r.currencyCode,
-          r.openingBalance,
-          r.totalBuys,
-          r.totalSells,
-          r.closingBalance,
-        ]) ?? [],
-    });
-    doc.save(`eod-report-${date}.pdf`);
-  }
-
-  return (
-    <div>
-      <div className="flex flex-wrap items-center gap-3 mb-5">
-        <input
-          type="date"
-          value={date}
-          max={today()}
-          onChange={(e) => setDate(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]"
-        />
-        <button
-          onClick={handleExportPdf}
-          className="bg-[#0a146e] text-white text-sm px-4 py-2 rounded-lg hover:bg-[#070e57] transition-colors"
-        >
-          {t('exportPdf')}
-        </button>
-        <button
-          onClick={() => window.print()}
-          className="border border-gray-300 text-gray-700 text-sm px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          {t('print')}
-        </button>
-      </div>
-
-      {isLoading ? (
-        <Spinner />
-      ) : (
-        <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <KpiCard label={t('transactions')} value={String(data?.totalTransactions ?? 0)} />
-            <KpiCard
-              label={t('voidedTxns')}
-              value={String(data?.voidedTransactions ?? 0)}
-            />
-            <KpiCard
-              label={t('totalVolume')}
-              value={`£${parseFloat(data?.totalVolumeGbp ?? '0').toLocaleString()}`}
-            />
-            <KpiCard
-              label={t('totalProfit')}
-              value={`£${parseFloat(data?.totalProfitGbp ?? '0').toFixed(2)}`}
-            />
-          </div>
-
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-[#0a146e] text-white text-xs uppercase">
-                  <th className="text-left px-5 py-4">{t('currency')}</th>
-                  <th className="text-right px-5 py-4">{t('opening')}</th>
-                  <th className="text-right px-5 py-4 text-green-300">{t('totalBuys')}</th>
-                  <th className="text-right px-5 py-4 text-red-300">{t('totalSells')}</th>
-                  <th className="text-right px-5 py-4">{t('closing')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data?.balances.map((row) => (
-                  <tr key={row.currencyId} className="border-t border-gray-100 hover:bg-gray-50">
-                    <td className="px-5 py-3">
-                      <span className="text-xl me-2">{countryFlag(row.countryCode)}</span>
-                      <span className="font-bold text-gray-900">{row.currencyCode}</span>
-                      <span className="text-gray-400 text-xs ms-2">({row.currencyNameEn})</span>
-                    </td>
-                    <td className="px-5 py-3 text-right text-gray-600">{row.openingBalance}</td>
-                    <td className="px-5 py-3 text-right text-green-600 font-medium">
-                      {row.totalBuys}
-                    </td>
-                    <td className="px-5 py-3 text-right text-red-600 font-medium">
-                      {row.totalSells}
-                    </td>
-                    <td
-                      className={`px-5 py-3 text-right font-bold text-lg ${
-                        parseFloat(row.closingBalance) < 0 ? 'text-red-600' : 'text-gray-900'
-                      }`}
-                    >
-                      {row.closingBalance}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 // ─── Main Reports Page ────────────────────────────────────────────────────────
 
 const TABS: { id: Tab; labelKey: string }[] = [
   { id: 'session', labelKey: 'tabSession' },
-  { id: 'profit', labelKey: 'tabProfit' },
   { id: 'volume', labelKey: 'tabVolume' },
   { id: 'customers', labelKey: 'tabCustomers' },
   { id: 'rates', labelKey: 'tabRates' },
   { id: 'audit', labelKey: 'tabAudit' },
-  { id: 'eod', labelKey: 'tabEndOfDay' },
 ];
 
 export default function ReportsPage() {
@@ -1037,12 +803,10 @@ export default function ReportsPage() {
 
       {/* Tab Content */}
       {activeTab === 'session' && <SessionTab />}
-      {activeTab === 'profit' && <ProfitTab />}
       {activeTab === 'volume' && <VolumeTab />}
       {activeTab === 'customers' && <CustomersTab />}
       {activeTab === 'rates' && <RatesTab />}
       {activeTab === 'audit' && <AuditTab />}
-      {activeTab === 'eod' && <EndOfDayTab />}
     </AppShell>
   );
 }

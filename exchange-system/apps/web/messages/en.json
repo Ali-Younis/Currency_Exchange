@@ -70,7 +70,7 @@
     "crossTitle": "Cross Transactions"
   },
   "report": {
-    "session": "Session Report",
+    "session": "Day Summary Report",
     "ledger": "Daily Ledger",
     "currency": "Currency",
     "opening": "Opening Balance",
@@ -83,9 +83,9 @@
     "date": "Date",
     "startDate": "Start Date",
     "endDate": "End Date",
-    "tabSession": "Session Summary",
+    "tabSession": "Day Summary",
     "tabProfit": "P&L Analysis",
-    "tabVolume": "Volume Trends",
+    "tabVolume": "Transaction Trends",
     "tabCustomers": "Top Customers",
     "tabRates": "Rate History",
     "tabAudit": "Audit Trail",

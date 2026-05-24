@@ -153,6 +153,7 @@ export interface TransactionDto {
   commission2?: string | null;
   notes?: string;
   isVoided: boolean;
+  voidedReason?: string | null;
   tellerId: string;
   tellerName: string;
   createdAt: string;
@@ -225,6 +226,7 @@ export interface TrendDataPoint {
   volumeGbp: string;
   buys: number;
   sells: number;
+  crosses: number;
 }
 
 export interface VolumeReport {

@@ -9,6 +9,7 @@ import api from '@/lib/api';
 import { CurrencyDto, OpeningBalanceDto } from '@exchange/shared';
 import { CurrencyLabel } from '@/components/CurrencyLabel';
 import { useAuth } from '@/contexts/AuthContext';
+import * as XLSX from 'xlsx';
 
 interface HistoryEntry {
   id: string;
@@ -63,6 +64,35 @@ export default function BalancesPage() {
   function getExisting(currencyId: string) {
     const bal = balances?.find((b) => b.currencyId === currencyId);
     return bal?.amount ?? '';
+  }
+
+  function handleExportBalances() {
+    const rows = currencies?.map((c) => ({
+      Currency: c.code,
+      Name: c.nameEn,
+      Amount: amounts[c.id] ?? getExisting(c.id) ?? '0',
+    })) ?? [];
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Initial Balances');
+    XLSX.writeFile(wb, `initial-balances-${date}.xlsx`);
+  }
+
+  function handleExportHistory() {
+    const rows = (history ?? []).map((h) => {
+      const ccy = currencies?.find((c) => c.id === h.payload?.currencyId);
+      return {
+        Date: new Date(h.createdAt).toLocaleString(),
+        'Session Date': h.payload?.sessionDate ?? '—',
+        Currency: ccy?.code ?? h.payload?.currencyId ?? '—',
+        Amount: h.payload?.amount ?? '—',
+        'Set By': h.user?.fullName ?? h.user?.username ?? '—',
+      };
+    });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Change History');
+    XLSX.writeFile(wb, `balance-history.xlsx`);
   }
 
   function handleSave() {
@@ -120,13 +150,25 @@ export default function BalancesPage() {
         >
           {mutation.isPending ? 'Saving…' : 'Save Balances'}
         </button>
+        <button
+          onClick={handleExportBalances}
+          className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors"
+        >
+          Export Excel
+        </button>
       </div>
 
       {/* Change History (admin only) */}
       {isAdmin && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm mt-6 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100">
+          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-gray-700">Change History</h3>
+            <button
+              onClick={handleExportHistory}
+              className="bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors"
+            >
+              Export Excel
+            </button>
           </div>
           {history && history.length > 0 ? (
             <div className="overflow-x-auto">

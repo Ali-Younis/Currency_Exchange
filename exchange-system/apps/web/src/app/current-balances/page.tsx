@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { formatNumber } from '@/lib/format';
 import { CurrencyLabel } from '@/components/CurrencyLabel';
+import * as XLSX from 'xlsx';
 
 interface CurrentBalanceRow {
   currencyId: string;
@@ -42,15 +43,39 @@ export default function CurrentBalancesPage() {
     ? new Date(dataUpdatedAt).toLocaleTimeString('en-GB')
     : '—';
 
+  function exportToExcel() {
+    const rows = (data ?? []).map((row) => ({
+      Currency: row.currencyCode,
+      Name: row.currencyNameEn,
+      Opening: parseFloat(row.openingBalance),
+      Buys: parseFloat(row.totalBuys),
+      Sells: parseFloat(row.totalSells),
+      Current: parseFloat(row.currentBalance),
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Current Balances');
+    XLSX.writeFile(wb, `current-balances-${today}.xlsx`);
+  }
+
   return (
     <AppShell>
       <PageHeader title="Current Balances" />
 
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-gray-500">Session: {today}</p>
-        <p className="text-xs text-gray-400">
-          Auto-refreshes every 30s · Last updated: {lastUpdated}
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="text-xs text-gray-400">
+            Auto-refreshes every 30s · Last updated: {lastUpdated}
+          </p>
+          <button
+            onClick={exportToExcel}
+            disabled={!data?.length}
+            className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors"
+          >
+            Export Excel
+          </button>
+        </div>
       </div>
 
       {isLoading ? (

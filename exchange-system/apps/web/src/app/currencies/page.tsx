@@ -7,6 +7,7 @@ import { useState } from 'react';
 import api from '@/lib/api';
 import { CurrencyDto, CreateCurrencyDto } from '@exchange/shared';
 import { CurrencyLabel } from '@/components/CurrencyLabel';
+import * as XLSX from 'xlsx';
 
 function CurrencyModal({
   onClose,
@@ -107,17 +108,42 @@ export default function CurrenciesPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['currencies-all'] }),
   });
 
+  function exportToExcel() {
+    const rows = orderedList.map((c) => ({
+      Code: c.code,
+      'Name (EN)': c.nameEn,
+      'Name (AR)': c.nameAr,
+      Symbol: c.symbol,
+      'Country Code': c.countryCode ?? '',
+      Status: c.isActive ? 'Active' : 'Inactive',
+      Order: c.sortOrder ?? '',
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Currencies');
+    XLSX.writeFile(wb, 'currencies.xlsx');
+  }
+
   return (
     <AppShell>
       <PageHeader
         title="Currencies"
         actions={
-          <button
-            onClick={() => setShowAdd(true)}
-            className="bg-[#0a146e] text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-[#070e57]"
-          >
-            + Add Currency
-          </button>
+          <>
+            <button
+              onClick={exportToExcel}
+              disabled={!orderedList.length}
+              className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+            >
+              Export Excel
+            </button>
+            <button
+              onClick={() => setShowAdd(true)}
+              className="bg-[#0a146e] text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-[#070e57]"
+            >
+              + Add Currency
+            </button>
+          </>
         }
       />
 

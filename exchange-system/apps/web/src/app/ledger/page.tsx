@@ -8,6 +8,26 @@ import { useState } from 'react';
 import api from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { PaginatedResult, TransactionDto } from '@exchange/shared';
+import * as XLSX from 'xlsx';
+
+function fmtAmount(amount: string, code: string): string {
+  try {
+    const parts = new Intl.NumberFormat('en', {
+      style: 'currency',
+      currency: code,
+      currencyDisplay: 'narrowSymbol',
+    }).formatToParts(parseFloat(amount));
+    const symbol = parts.find((p) => p.type === 'currency')?.value ?? code;
+    const num = parts
+      .filter((p) => p.type !== 'currency' && p.type !== 'literal')
+      .map((p) => p.value)
+      .join('');
+    // Put symbol before number (standard), trim decimal if .00
+    return `${symbol}${parseFloat(amount) % 1 === 0 ? String(Math.floor(parseFloat(amount))) : num}`;
+  } catch {
+    return `${amount} ${code}`;
+  }
+}
 
 export default function LedgerPage() {
   const t = useTranslations();
@@ -39,18 +59,50 @@ export default function LedgerPage() {
   const sells = transactions.filter((t) => t.type === 'SELL');
   const crosses = transactions.filter((t) => t.type === 'CROSS');
 
+  function exportToExcel() {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const datePart = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const timePart = `${pad(now.getHours())}-${pad(now.getMinutes())}`;
+    const allRows = transactions.map((tx) => ({
+      Receipt: tx.receiptNumber,
+      Type: tx.type,
+      Customer: tx.customerName,
+      In: `${tx.amountIn} ${tx.currencyInCode}`,
+      Out: `${tx.amountOut} ${tx.currencyOutCode}`,
+      Rate: tx.rateApplied,
+      'GBP Value': tx.valueInGbp,
+      Time: new Date(tx.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
+      Voided: tx.isVoided ? 'Yes' : 'No',
+      'Void Reason': tx.voidedReason ?? '',
+    }));
+    const ws = XLSX.utils.json_to_sheet(allRows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Ledger');
+    XLSX.writeFile(wb, `ledger-${date}-exported-${datePart}-${timePart}.xlsx`);
+  }
+
   return (
     <AppShell permission="ledger">
       <PageHeader
         title={t('nav.ledger')}
         actions={
-          <input
-            type="date"
-            value={date}
-            max={today}
-            onChange={(e) => setDate(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]"
-          />
+          <div className="flex items-center gap-3">
+            <button
+              onClick={exportToExcel}
+              disabled={transactions.length === 0}
+              className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+              Export Excel
+            </button>
+            <input
+              type="date"
+              value={date}
+              max={today}
+              onChange={(e) => setDate(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]"
+            />
+          </div>
         }
       />
 
@@ -149,7 +201,7 @@ function LedgerTable({
               <th className="text-right px-4 py-3">Rate</th>
               <th className="text-right px-4 py-3">GBP Value</th>
               <th className="text-left px-4 py-3">Time</th>
-              {isAdmin && <th className="px-4 py-3" />}
+              {isAdmin && <th className="px-4 py-3">Void</th>}
             </tr>
           </thead>
           <tbody>
@@ -157,13 +209,11 @@ function LedgerTable({
               <tr key={tx.id} className={`border-t border-gray-100 hover:bg-gray-50 ${tx.isVoided ? 'opacity-40 line-through' : ''}`}>
                 <td className="px-4 py-3 font-mono text-xs text-gray-600">{tx.receiptNumber}</td>
                 <td className="px-4 py-3 text-gray-900">{tx.customerName}</td>
-                <td className="px-4 py-3 text-right">
-                  <span className="font-medium">{tx.amountIn}</span>{' '}
-                  <span className="text-gray-400 text-xs">{tx.currencyInCode}</span>
+                <td className="px-4 py-3 text-right font-medium">
+                  {fmtAmount(tx.amountIn, tx.currencyInCode)}
                 </td>
-                <td className="px-4 py-3 text-right">
-                  <span className="font-medium">{tx.amountOut}</span>{' '}
-                  <span className="text-gray-400 text-xs">{tx.currencyOutCode}</span>
+                <td className="px-4 py-3 text-right font-medium">
+                  {fmtAmount(tx.amountOut, tx.currencyOutCode)}
                 </td>
                 <td className="px-4 py-3 text-right text-gray-600 font-mono">{tx.rateApplied}</td>
                 <td className="px-4 py-3 text-right font-semibold">£{tx.valueInGbp}</td>
@@ -172,7 +222,11 @@ function LedgerTable({
                 </td>
                 {isAdmin && (
                   <td className="px-4 py-3">
-                    {!tx.isVoided && (
+                    {tx.isVoided ? (
+                      <span className="text-xs text-gray-400 italic" title={tx.voidedReason ?? ''}>
+                        {tx.voidedReason ? tx.voidedReason : 'Voided'}
+                      </span>
+                    ) : (
                       <button
                         onClick={() => onVoid(tx.id)}
                         className="text-xs text-red-500 hover:text-red-700"

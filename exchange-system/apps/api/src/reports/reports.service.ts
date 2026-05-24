@@ -182,7 +182,7 @@ export class ReportsService {
     // Group by date bucket
     const buckets = new Map<
       string,
-      { count: number; volumeGbp: Prisma.Decimal; buys: number; sells: number }
+      { count: number; volumeGbp: Prisma.Decimal; buys: number; sells: number; crosses: number }
     >();
 
     for (const tx of transactions) {
@@ -205,10 +205,12 @@ export class ReportsService {
         volumeGbp: new Prisma.Decimal(0),
         buys: 0,
         sells: 0,
+        crosses: 0,
       };
       bucket.count += 1;
       bucket.volumeGbp = bucket.volumeGbp.plus(new Prisma.Decimal(tx.valueInGbp));
       if (tx.type === 'BUY') bucket.buys += 1;
+      else if (tx.type === 'CROSS') bucket.crosses += 1;
       else bucket.sells += 1;
       buckets.set(key, bucket);
     }
@@ -221,6 +223,7 @@ export class ReportsService {
         volumeGbp: b.volumeGbp.toFixed(2),
         buys: b.buys,
         sells: b.sells,
+        crosses: b.crosses,
       }));
 
     return {

@@ -6,7 +6,6 @@ import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import api from '@/lib/api';
 import { SessionReport } from '@exchange/shared';
-import { FileSpreadsheet } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const todayStr = () => new Date().toISOString().split('T')[0];
@@ -65,10 +64,9 @@ export default function DashboardPage() {
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <button
               onClick={exportToExcel}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+              className="bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
             >
-              <FileSpreadsheet size={13} />
-              {t('dashboard.exportExcel')}
+              Export Excel
             </button>
           </div>
           <div className="overflow-x-auto">

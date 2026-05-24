@@ -255,7 +255,17 @@ export class TransactionsService {
       this.prisma.transaction.count({ where }),
     ]);
 
-    return { data, total, page, pageSize };
+    return {
+      data: data.map((tx) => ({
+        ...tx,
+        currencyInCode: tx.currencyIn?.code ?? '',
+        currencyOutCode: tx.currencyOut?.code ?? '',
+        tellerName: tx.teller?.fullName ?? '',
+      })),
+      total,
+      page,
+      pageSize,
+    };
   }
 
   async findOne(id: string) {

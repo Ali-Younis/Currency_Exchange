@@ -8,6 +8,7 @@ import { useState } from 'react';
 import api from '@/lib/api';
 import { CurrencyDto } from '@exchange/shared';
 import { CurrencyLabel } from '@/components/CurrencyLabel';
+import * as XLSX from 'xlsx';
 
 interface RateRow {
   currency: CurrencyDto;
@@ -41,6 +42,29 @@ export default function RatesPage() {
       .filter(([, v]) => v.buyRate && v.sellRate)
       .map(([currencyId, v]) => ({ currencyId, ...v }));
     if (entries.length > 0) mutation.mutate(entries);
+  }
+
+  function exportToExcel() {
+    const rows = (rateData ?? [])
+      .filter(({ currency }) => currency.code !== 'GBP')
+      .map(({ currency, rate }) => {
+        const edit = edits[currency.id];
+        const buy = edit?.buyRate ?? rate?.buyRate ?? '';
+        const sell = edit?.sellRate ?? rate?.sellRate ?? '';
+        const spread = buy && sell ? (parseFloat(sell) - parseFloat(buy)).toFixed(6) : '';
+        return {
+          Currency: currency.code,
+          Name: currency.nameEn,
+          'Buy Rate': buy,
+          'Sell Rate': sell,
+          Spread: spread,
+          'Last Updated': rate ? new Date(rate.effectiveDate).toLocaleString() : '',
+        };
+      });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Exchange Rates');
+    XLSX.writeFile(wb, `exchange-rates-${new Date().toISOString().split('T')[0]}.xlsx`);
   }
 
   return (
@@ -121,13 +145,20 @@ export default function RatesPage() {
               })}
             </tbody>
           </table>
-          <div className="px-5 py-4 border-t border-gray-100">
+          <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
             <button
               onClick={handleSave}
               disabled={mutation.isPending || Object.keys(edits).length === 0}
               className="bg-[#0a146e] text-white font-semibold px-6 py-2.5 rounded-lg hover:bg-[#070e57] transition-colors disabled:opacity-60"
             >
               {mutation.isPending ? 'Saving…' : 'Save Rates'}
+            </button>
+            <button
+              onClick={exportToExcel}
+              disabled={!rateData?.length}
+              className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors"
+            >
+              Export Excel
             </button>
           </div>
         </div>

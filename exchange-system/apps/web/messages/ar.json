@@ -70,7 +70,7 @@
     "crossTitle": "عمليات التحويل"
   },
   "report": {
-    "session": "تقرير الجلسة",
+    "session": "تقرير ملخص اليوم",
     "ledger": "حركات اليوم",
     "currency": "العملة",
     "opening": "رصيد البداية",
@@ -83,9 +83,9 @@
     "date": "التاريخ",
     "startDate": "تاريخ البداية",
     "endDate": "تاريخ النهاية",
-    "tabSession": "ملخص الجلسة",
+    "tabSession": "ملخص اليوم",
     "tabProfit": "تحليل الأرباح",
-    "tabVolume": "اتجاهات الحجم",
+    "tabVolume": "اتجاهات المعاملات",
     "tabCustomers": "أفضل العملاء",
     "tabRates": "تاريخ الأسعار",
     "tabAudit": "سجل التدقيق",
