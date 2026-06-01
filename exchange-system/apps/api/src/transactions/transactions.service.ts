@@ -1,7 +1,11 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException } from '@nestjs/common';
+import * as fs from 'fs';
+import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
+import { CustomersService } from '../customers/customers.service';
+import { AppSettingsService } from '../app-settings/app-settings.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { VoidTransactionDto } from './dto/void-transaction.dto';
 import { Prisma } from '@prisma/client';
@@ -26,9 +30,16 @@ export class TransactionsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly email: EmailService,
+    private readonly customers: CustomersService,
+    private readonly settings: AppSettingsService,
   ) {}
 
   async create(dto: CreateTransactionDto, tellerId: string, role: string = 'ADMIN') {
+    // Block same-currency cross transactions
+    if (dto.currencyInId === dto.currencyOutId) {
+      throw new BadRequestException('Currency In and Currency Out cannot be the same');
+    }
+
     // Check section permission for non-admin users
     if (role !== 'ADMIN') {
       const permissionKey = dto.type === 'BUY' ? 'buy' : dto.type === 'SELL' ? 'sell' : 'cross';
@@ -160,6 +171,7 @@ export class TransactionsService {
               type: dto.type,
               customerName: dto.customerName,
               customerEmail: dto.customerEmail,
+              customerPhone: dto.customerPhone,
               currencyInId: dto.currencyInId,
               amountIn: dto.amountIn,
               currencyOutId: dto.currencyOutId,
@@ -193,6 +205,17 @@ export class TransactionsService {
     }
 
     const result = createdTx!;
+
+    // Find-or-create customer and link to this transaction (fire-and-forget — non-blocking)
+    void this.customers
+      .findOrCreate(dto.customerPhone, dto.customerName, dto.customerEmail)
+      .then((customer) =>
+        this.prisma.transaction.update({
+          where: { id: result.id },
+          data: { customerId: customer.id },
+        }),
+      )
+      .catch(() => { /* non-critical — transaction is already saved */ });
 
     await this.audit.log({
       userId: tellerId,
@@ -298,6 +321,18 @@ export class TransactionsService {
       entityId: id,
       payload: { reason: dto.reason },
     });
+
+    // Delete the stored PDF receipt (best-effort — failure must not block the void)
+    try {
+      const dir = path.resolve((await this.settings.get('pdf_save_directory')) ?? '/app/pdf-receipts');
+      const receiptFilename = `receipt-${tx.receiptNumber}.pdf`;
+      const safeName = path.basename(receiptFilename).replace(/[^a-zA-Z0-9._-]/g, '_');
+      const full = path.join(dir, safeName);
+      // Guard against path traversal
+      if (full.startsWith(dir + path.sep) || full === dir) {
+        if (fs.existsSync(full)) fs.unlinkSync(full);
+      }
+    } catch { /* silently ignore — void is already committed */ }
 
     return updated;
   }

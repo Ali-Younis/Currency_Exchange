@@ -139,6 +139,7 @@ export interface TransactionDto {
   type: TransactionType;
   customerName: string;
   customerEmail?: string | null;
+  customerPhone?: string | null;
   currencyInId: string;
   currencyInCode: string;
   amountIn: string;
@@ -239,15 +240,15 @@ export interface VolumeReport {
 
 export interface TopCustomerDto {
   rank: number;
+  customerId: string;
   customerName: string;
+  customerPhone: string;
+  customerEmail: string | null;
   totalTransactions: number;
-  totalVolumeGbp: string;
-  totalProfitGbp: string;
+  createdAt: string;
 }
 
 export interface TopCustomersReport {
-  startDate: string;
-  endDate: string;
   customers: TopCustomerDto[];
 }
 

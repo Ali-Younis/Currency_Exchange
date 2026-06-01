@@ -52,11 +52,13 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change_me_in_production_please}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:80}
     ports:
       - "3001:3001"
     volumes:
       - backups_data:/app/backups
       - pdf_receipts_data:/app/pdf-receipts
+      - customer_docs_data:/app/customer-docs
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3001/api/v1/health || exit 1"]
       interval: 30s
@@ -101,3 +103,4 @@ volumes:
   redis_data:
   backups_data:
   pdf_receipts_data:
+  customer_docs_data:

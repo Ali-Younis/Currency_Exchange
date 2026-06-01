@@ -303,7 +303,7 @@ export class AuthService {
         id: user.id,
         username: user.username,
         fullName: user.fullName,
-        receiptAlias: user.receiptAlias ?? null,
+        receiptAlias: user.receiptAlias || null,
         role: user.role as AuthTokenPayload['role'],
         isActive: user.isActive,
         permissions: Array.isArray(user.permissions) ? (user.permissions as string[]) : [],

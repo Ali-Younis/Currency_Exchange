@@ -1,6 +1,7 @@
 import {
   IsIn, IsUUID, IsDateString, IsNumberString, IsNotEmpty, IsOptional, IsString, MaxLength, IsEmail,
 } from 'class-validator';
+import { IsValidPhone } from '../../common/validators/phone.validator';
 import { TransactionType } from '@exchange/shared';
 
 export class CreateTransactionDto {
@@ -16,6 +17,9 @@ export class CreateTransactionDto {
   @IsEmail()
   @MaxLength(255)
   customerEmail?: string;
+
+  @IsValidPhone()
+  customerPhone!: string;
 
   @IsUUID()
   currencyInId!: string;

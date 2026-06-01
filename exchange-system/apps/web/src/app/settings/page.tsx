@@ -706,6 +706,17 @@ export default function SettingsPage() {
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]"
                 />
                 <p className="text-xs text-gray-400 mt-1">
+                  This is a path <strong>inside the Docker container</strong>, not your local machine. Default: <span className="font-mono">/app/backups/</span>
+                </p>
+                {/^(\/Users\/|\/home\/|\/Windows\/|\/mnt\/)/.test(backupConfig.directory) && (
+                  <div className="mt-2 flex items-start gap-2 rounded-lg bg-yellow-50 border border-yellow-300 px-3 py-2">
+                    <span className="text-yellow-500 text-base leading-snug">⚠</span>
+                    <p className="text-xs text-yellow-800">
+                      This looks like a <strong>host machine path</strong>. The backup service runs inside Docker and cannot access your local filesystem directly. Use a container path like <span className="font-mono">/app/backups</span> instead.
+                    </p>
+                  </div>
+                )}
+                <p className="text-xs text-gray-400 mt-1">
                   Files saved as: <span className="font-mono">RMX2_Exchange_Backup_YYYY-MM-DD_HH-MM-SS.json</span>
                 </p>
               </div>
@@ -817,8 +828,16 @@ export default function SettingsPage() {
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]"
             />
             <p className="text-xs text-gray-400 mt-1">
-              PDF receipts are saved inside the Docker volume. Access via Docker or mount the volume to a host path.
+              This is a path <strong>inside the Docker container</strong>, not your local machine. Default: <span className="font-mono">/app/pdf-receipts/</span>
             </p>
+            {/^(\/Users\/|\/home\/|\/Windows\/|\/mnt\/)/.test(pdfDir) && (
+              <div className="mt-2 flex items-start gap-2 rounded-lg bg-yellow-50 border border-yellow-300 px-3 py-2">
+                <span className="text-yellow-500 text-base leading-snug">⚠</span>
+                <p className="text-xs text-yellow-800">
+                  This looks like a <strong>host machine path</strong>. The service runs inside Docker and cannot access your local filesystem directly. Use a container path like <span className="font-mono">/app/pdf-receipts</span> instead.
+                </p>
+              </div>
+            )}
           </div>
           <button
             onClick={savePdfDirectory}

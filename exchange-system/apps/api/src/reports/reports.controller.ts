@@ -49,8 +49,8 @@ export class ReportsController {
 
   /** Volume & trend report — daily/weekly/monthly transaction counts */
   @Get('volume')
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('reports')
   getVolumeReport(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
@@ -60,22 +60,20 @@ export class ReportsController {
     return this.svc.getVolumeReport(startDate ?? thirtyDaysAgo(), endDate ?? today(), groupBy, currencyId);
   }
 
-  /** Top customers by transaction volume */
+  /** Top customers by transaction count (all-time, no date filter) */
   @Get('customers')
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('reports')
   getTopCustomers(
-    @Query('startDate') startDate: string,
-    @Query('endDate') endDate: string,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+    @Query('limit', new DefaultValuePipe(25), ParseIntPipe) limit: number,
   ) {
-    return this.svc.getTopCustomers(startDate ?? thirtyDaysAgo(), endDate ?? today(), limit);
+    return this.svc.getTopCustomers(limit);
   }
 
   /** Rate history for a specific currency */
   @Get('rates-history')
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('reports')
   getRateHistory(
     @Query('currencyId') currencyId: string,
     @Query('startDate') startDate: string,
@@ -86,8 +84,8 @@ export class ReportsController {
 
   /** Paginated audit trail */
   @Get('audit')
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('reports')
   getAuditTrail(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
@@ -101,8 +99,8 @@ export class ReportsController {
 
   /** Enhanced end-of-day summary with profit totals */
   @Get('end-of-day')
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('reports')
   getEndOfDay(@Query('date') date: string) {
     return this.svc.getEndOfDay(date ?? today());
   }

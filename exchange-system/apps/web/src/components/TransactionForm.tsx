@@ -8,7 +8,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { useAuth } from '@/contexts/AuthContext';
 import api from '@/lib/api';
 import { CurrencyDto, TransactionDto } from '@exchange/shared';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface RateRow {
   currency: CurrencyDto;
@@ -26,6 +26,7 @@ interface CrossInfo {
 interface FormData {
   customerName: string;
   customerEmail: string;
+  customerPhone: string;
   currencyInId: string;
   amountIn: string;
   currencyOutId: string;
@@ -305,10 +306,74 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
   const [commValue, setCommValue] = useState('0');
   const [commType2, setCommType2] = useState<'fixed' | 'pct'>('fixed');
   const [commValue2, setCommValue2] = useState('0');
+  // Customer phone lookup
+  const [lookupResult, setLookupResult] = useState<{
+    found: boolean;
+    customerId?: string;
+    name?: string;
+    totalTransactions?: number;
+    transactionTypes?: string[];
+  } | null>(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  // Phone validation state — set by the API's strict two-step validator
+  const [phoneValidation, setPhoneValidation] = useState<{
+    checked: boolean;
+    valid: boolean;
+    formatted?: string;
+    error?: string;
+    rule?: string;
+  }>({ checked: false, valid: false });
+  // Proof of identity
+  const [docType, setDocType] = useState('');
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [docUploadStatus, setDocUploadStatus] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
+  // Capture phone before submit so onSuccess can use it
+  const pendingPhoneRef = useRef<string>('');
   const today = new Date().toISOString().split('T')[0];
 
+  const lookupPhone = useCallback(async (phone: string) => {
+    const trimmed = phone.trim();
+    if (!trimmed || trimmed.length < 4) {
+      setLookupResult(null);
+      setPhoneValidation({ checked: false, valid: false });
+      return;
+    }
+    setLookupLoading(true);
+    try {
+      // Step 1 — strict two-step validation (syntax + regional rules)
+      const validRes = await api.post<{
+        valid: boolean; formatted?: string; country?: string; type?: string;
+        rule?: string; error?: string;
+      }>('/customers/validate-phone', { phone: trimmed });
+
+      if (!validRes.data.valid) {
+        setPhoneValidation({
+          checked: true,
+          valid: false,
+          error: validRes.data.error,
+          rule: validRes.data.rule,
+        });
+        setLookupResult(null);
+        setLookupLoading(false);
+        return;
+      }
+
+      // Phone is valid — use the formatted (normalised) version
+      const formatted = validRes.data.formatted ?? trimmed;
+      setPhoneValidation({ checked: true, valid: true, formatted });
+
+      // Step 2 — customer lookup for the badge
+      const res = await api.get<{
+        found: boolean; customerId?: string; name?: string;
+        totalTransactions?: number; transactionTypes?: string[];
+      }>(`/customers/lookup?phone=${encodeURIComponent(formatted)}`);
+      setLookupResult(res.data);
+    } catch { setLookupResult(null); }
+    finally { setLookupLoading(false); }
+  }, []);
+
   const { register, handleSubmit, reset, setValue, control, formState: { errors } } =
-    useForm<FormData>();
+    useForm<FormData>({ defaultValues: { customerPhone: '+44' } });
 
   const currencyInId = useWatch({ control, name: 'currencyInId' });
   const currencyOutId = useWatch({ control, name: 'currencyOutId' });
@@ -455,7 +520,7 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
       void (async () => {
         try {
           const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-          const buffer = await downloadReceiptPdf(tx, type, commSnapshot, { returnBuffer: true, cashierName: user?.receiptAlias ?? user?.fullName ?? '' });
+          const buffer = await downloadReceiptPdf(tx, type, commSnapshot, { returnBuffer: true, cashierName: user?.receiptAlias || user?.fullName || '' });
           if (buffer && token) {
             // Chunked encoding avoids "Maximum call stack size exceeded" for large PDFs
             const bytes = new Uint8Array(buffer as ArrayBuffer);
@@ -473,6 +538,38 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
           }
         } catch { /* silent */ }
       })();
+
+      // Upload proof of identity document if selected
+      const capturedPhone = pendingPhoneRef.current;
+      const capturedDocFile = docFile;
+      const capturedDocType = docType;
+      if (capturedDocFile && capturedDocType) {
+        setDocUploadStatus('uploading');
+        void (async () => {
+          try {
+            // Brief pause for the async customer-linkage in the service to complete
+            await new Promise((r) => setTimeout(r, 800));
+            const freshLookup = await api.get<{ found: boolean; customerId?: string }>(
+              `/customers/lookup?phone=${encodeURIComponent(capturedPhone)}`,
+            );
+            if (!freshLookup.data.found || !freshLookup.data.customerId) {
+              setDocUploadStatus('error');
+              return;
+            }
+            const uploadForm = new window.FormData();
+            uploadForm.append('file', capturedDocFile);
+            uploadForm.append('docType', capturedDocType);
+            const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+            await fetch(`/api/v1/customers/${freshLookup.data.customerId}/documents`, {
+              method: 'POST',
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+              body: uploadForm,
+            });
+            setDocUploadStatus('done');
+          } catch { setDocUploadStatus('error'); }
+        })();
+      }
+
       pendingCommRef.current = null;
       reset();
       setResetCount((n) => n + 1); // triggers GBP re-lock useEffect
@@ -480,6 +577,11 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
       setCommValue2('0');
       setCommType('fixed');
       setCommType2('fixed');
+      setLookupResult(null);
+      setPhoneValidation({ checked: false, valid: false });
+      setDocType('');
+      setDocFile(null);
+      // docUploadStatus intentionally NOT reset here — keep showing result
       qc.invalidateQueries({ queryKey: ['session-report'] });
       qc.invalidateQueries({ queryKey: ['transactions'] });
       qc.invalidateQueries({ queryKey: ['eod-report'] });
@@ -487,6 +589,16 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
   });
 
   // user is referenced via user?.fullName in downloadReceiptPdf calls
+
+  // Phone field registered separately so we can chain RHF's onChange/onBlur
+  // without overriding them — otherwise data.customerPhone stays as '+44' on submit
+  const phoneField = register('customerPhone', {
+    required: 'Phone number is required',
+    validate: () =>
+      !phoneValidation.checked || phoneValidation.valid
+        ? true
+        : (phoneValidation.error ?? 'Invalid phone number'),
+  });
 
   return (
     <div className="max-w-2xl">
@@ -499,7 +611,7 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
             </div>
           </div>
           <button
-            onClick={() => downloadReceiptPdf(lastReceipt, type, lastCommInfo, { cashierName: user?.receiptAlias ?? user?.fullName ?? '' })}
+            onClick={() => downloadReceiptPdf(lastReceipt, type, lastCommInfo, { cashierName: user?.receiptAlias || user?.fullName || '' })}
             className="text-xs border border-green-600 text-green-700 rounded px-3 py-1.5 hover:bg-green-100"
           >
             {t('receipt')} (PDF)
@@ -509,6 +621,8 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
 
       <form
         onSubmit={handleSubmit((data) => {
+          // Capture phone for doc upload in onSuccess
+          pendingPhoneRef.current = data.customerPhone;
           // Snapshot commission before state is reset on success
           const gbp = currencies?.find((c) => c.code === 'GBP');
           const amt = parseFloat(data.amountIn);
@@ -577,6 +691,64 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
           {errors.customerEmail && <p className="text-xs text-red-500 mt-1">{errors.customerEmail.message}</p>}
         </div>
 
+        {/* Customer Phone */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Phone Number <span className="text-xs text-red-500">*</span>
+            <span className="text-xs text-gray-400 ms-2 font-normal">(include country code)</span>
+          </label>
+          {/* Phone input — RHF handlers chained so field value is tracked correctly on submit */}
+          <input
+            type="tel"
+            {...phoneField}
+            placeholder="+447700900000"
+            onBlur={(e) => {
+              void phoneField.onBlur(e);
+              void lookupPhone(e.target.value);
+            }}
+            onChange={(e) => {
+              void phoneField.onChange(e);
+              setPhoneValidation({ checked: false, valid: false });
+              setLookupResult(null);
+            }}
+            className={`w-full border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e] ${
+              phoneValidation.checked && !phoneValidation.valid
+                ? 'border-red-400 bg-red-50'
+                : phoneValidation.valid
+                ? 'border-green-400 bg-green-50'
+                : 'border-gray-300'
+            }`}
+          />
+          {/* Phone validation error from strict two-step validator */}
+          {phoneValidation.checked && !phoneValidation.valid && phoneValidation.error && (
+            <div className="mt-1.5 rounded-lg bg-red-50 border border-red-200 px-3 py-2">
+              <p className="text-xs font-semibold text-red-700">
+                {phoneValidation.rule === 'syntax_check' ? '⚠ Syntax check failed' : '⚠ Regional rule check failed'}
+              </p>
+              <p className="text-xs text-red-600 mt-0.5">{phoneValidation.error}</p>
+            </div>
+          )}
+          {errors.customerPhone && !phoneValidation.checked && (
+            <p className="text-xs text-red-500 mt-1">{errors.customerPhone.message}</p>
+          )}
+          {lookupLoading && (
+            <p className="text-xs text-gray-400 mt-1 animate-pulse">Validating &amp; looking up customer…</p>
+          )}
+          {phoneValidation.valid && lookupResult && !lookupLoading && (
+            <span
+              className={`mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                lookupResult.found
+                  ? 'bg-green-50 text-green-700 border border-green-200'
+                  : 'bg-gray-50 text-gray-500 border border-gray-200'
+              }`}
+            >
+              {lookupResult.found
+                ? `${lookupResult.totalTransactions} previous transaction${lookupResult.totalTransactions !== 1 ? 's' : ''} · ${lookupResult.transactionTypes?.join(', ')}`
+                : 'New Customer'}
+            </span>
+          )}
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
           {/* Currency In */}
           <div>
@@ -636,7 +808,13 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
               </div>
             ) : (
               <select
-                {...register('currencyOutId', { required: true })}
+                {...register('currencyOutId', {
+                  required: true,
+                  validate: (v) =>
+                    type !== 'CROSS' || !v || v !== currencyInId
+                      ? true
+                      : 'Currency Out cannot be the same as Currency In',
+                })}
                 className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]"
               >
                 <option value="">Select…</option>
@@ -647,7 +825,11 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
                 ))}
               </select>
             )}
-            {errors.currencyOutId && <p className="text-xs text-red-500 mt-1">Required</p>}
+            {errors.currencyOutId && (
+              <p className="text-xs text-red-500 mt-1">
+                {errors.currencyOutId.message || 'Required'}
+              </p>
+            )}
           </div>
 
           {/* Amount Out — auto-calculated */}
@@ -784,6 +966,65 @@ function TransactionForm({ type }: { type: 'BUY' | 'SELL' | 'CROSS' }) {
             </div>
           </div>
         )}
+
+        {/* Proof of Identity */}
+        <div className="border border-gray-200 rounded-lg p-4 space-y-3 bg-gray-50">
+          <p className="text-sm font-medium text-gray-700">
+            Proof of Identity
+            <span className="text-xs text-gray-400 ms-2 font-normal">(optional — stored securely)</span>
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Document Type</label>
+              <select
+                value={docType}
+                onChange={(e) => setDocType(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]"
+              >
+                <option value="">Select type…</option>
+                <option value="PASSPORT">Passport</option>
+                <option value="PASSPORT_CARD">Passport Card</option>
+                <option value="NATIONAL_ID">National ID</option>
+                <option value="DRIVING_LICENSE">Driving License</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Upload File (max 10 MB)</label>
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                onChange={(e) => {
+                  const f = e.target.files?.[0] ?? null;
+                  if (f && f.size > 10 * 1024 * 1024) {
+                    alert('File too large — maximum 10 MB');
+                    e.target.value = '';
+                    return;
+                  }
+                  setDocFile(f);
+                  setDocUploadStatus('idle');
+                }}
+                className="w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              />
+            </div>
+          </div>
+          {docFile && docUploadStatus === 'idle' && (
+            <p className="text-xs text-gray-500">
+              Selected: <span className="font-medium">{docFile.name}</span> ({(docFile.size / 1024).toFixed(0)} KB)
+              {!docType && <span className="text-amber-600 ms-2">— please select a document type</span>}
+            </p>
+          )}
+          {docUploadStatus === 'uploading' && (
+            <p className="text-xs text-blue-600 animate-pulse">Uploading document…</p>
+          )}
+          {docUploadStatus === 'done' && (
+            <p className="text-xs text-green-600">✓ Document uploaded successfully.</p>
+          )}
+          {docUploadStatus === 'error' && (
+            <p className="text-xs text-red-500">
+              Document upload failed — you can upload it later from Customer Inventory.
+            </p>
+          )}
+        </div>
 
         {mutation.isError && (
           <div className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-2.5">

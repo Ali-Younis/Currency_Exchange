@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
 import {
   ClipboardList, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight,
-  BookOpen, BarChart2, Settings, LogOut, Users, Coins, TrendingUp, Landmark, Activity, Info,
+  BookOpen, BarChart2, Settings, LogOut, Users, Coins, TrendingUp, Landmark, Activity, Info, IdCard,
 } from 'lucide-react';
 
 interface NavItem {
@@ -25,6 +25,7 @@ const navItems: NavItem[] = [
   { key: 'cross',     href: '/cross',     icon: <ArrowLeftRight size={18} />,  permission: 'cross' },
   { key: 'ledger',    href: '/ledger',    icon: <BookOpen size={18} />,        permission: 'ledger' },
   { key: 'reports',   href: '/reports',   icon: <BarChart2 size={18} />,       permission: 'reports' },
+  { key: 'customers', href: '/customers', icon: <IdCard size={18} />,          permission: 'customers' },
   { key: 'balances',       href: '/balances',        icon: <Landmark size={18} />,  adminOnly: true },
   { key: 'currentBalances', href: '/current-balances', icon: <Activity size={18} />, adminOnly: true },
   { key: 'rates',      href: '/rates',      icon: <TrendingUp size={18} />, adminOnly: true },

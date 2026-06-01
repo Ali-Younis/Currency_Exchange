@@ -238,28 +238,30 @@ export class ReportsService {
   /**
    * Top Customers — ranked by total GBP value or transaction count.
    */
-  async getTopCustomers(startDate: string, endDate: string, limit: number = 20) {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-
-    const groups = await this.prisma.transaction.groupBy({
-      by: ['customerName'],
-      where: { isVoided: false, sessionDate: { gte: start, lte: end } },
-      _sum: { valueInGbp: true, spreadProfitGbp: true },
-      _count: { id: true },
-      orderBy: { _sum: { valueInGbp: 'desc' } },
-      take: limit,
+  async getTopCustomers(limit: number = 25) {
+    // Query all customers ordered by total transaction count (all-time, no date filter)
+    const customers = await this.prisma.customer.findMany({
+      include: {
+        _count: { select: { transactions: { where: { isVoided: false } } } },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 1000, // fetch all, sort in JS for flexibility
     });
 
+    // Sort by transaction count descending
+    const sorted = customers
+      .sort((a, b) => b._count.transactions - a._count.transactions)
+      .slice(0, limit);
+
     return {
-      startDate,
-      endDate,
-      customers: groups.map((g, idx) => ({
+      customers: sorted.map((c, idx) => ({
         rank: idx + 1,
-        customerName: g.customerName,
-        totalTransactions: g._count.id,
-        totalVolumeGbp: new Prisma.Decimal(g._sum.valueInGbp ?? 0).toFixed(2),
-        totalProfitGbp: new Prisma.Decimal(g._sum.spreadProfitGbp ?? 0).toFixed(4),
+        customerId: c.id,
+        customerName: c.name,
+        customerPhone: c.phone,
+        customerEmail: c.email,
+        totalTransactions: c._count.transactions,
+        createdAt: c.createdAt,
       })),
     };
   }

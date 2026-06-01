@@ -14,6 +14,7 @@ const TELLER_PERMISSIONS: { key: string; label: string }[] = [
   { key: 'cross',     label: 'Cross-Currency' },
   { key: 'ledger',    label: 'Ledger' },
   { key: 'reports',   label: 'Reports' },
+  { key: 'customers', label: 'Customer Inventory' },
 ];
 
 function UserModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
@@ -60,6 +61,7 @@ function UserModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Email</label>
             <input type="email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+              required
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0a146e]" />
           </div>
           <div>

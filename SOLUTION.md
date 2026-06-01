@@ -193,10 +193,11 @@ All reports are served from `GET /reports/<endpoint>` and require a valid JWT.
 - `trendPoints[]`: each bucket has `date` (bucket start), `count`, `volumeGbp`, `buys`, `sells`
 - Week buckets start on Monday (ISO); month buckets start on the 1st
 
-### Top Customers (`/reports/top-customers?startDate=…&endDate=…&limit=20`)
-**Customers ranked by total GBP volume (admin only).**
-- `totalVolumeGbp`, `totalProfitGbp`, `totalTransactions` per customer name
-- Sorted descending by volume; `limit` defaults to 20
+### Top Customers (`/reports/customers?limit=50`)
+**All-time customer ranking by transaction count (admin + customers permission).**
+- Queries the `Customer` table; counts non-voided transactions
+- Returns: `rank`, `customerId`, `customerName`, `customerPhone`, `customerEmail`, `totalTransactions`, `createdAt`
+- No date filter — always all-time; `limit` defaults to 25
 
 ### Rate History (`/reports/rate-history/:currencyId?startDate=…&endDate=…`)
 **Historical buy/sell rates for a currency (admin only).**
@@ -214,3 +215,82 @@ All reports are served from `GET /reports/<endpoint>` and require a valid JWT.
   - `totalTransactions` (non-voided), `voidedTransactions`
   - `totalVolumeGbp`, `totalProfitGbp`
   - `balances[]` — same rows as Session Report
+
+---
+
+## Phase 6 Features — Customer Management & Identity Documents
+
+### Customer Entity
+Every transaction now captures the customer's **phone number** (E.164 format, e.g. `+447700900000`). A `Customer` record is automatically created on the first transaction and linked to all subsequent transactions from the same phone number.
+
+| Model | Key Fields |
+|---|---|
+| `Customer` | `id`, `phone` (unique), `name`, `email?`, `createdAt` |
+| `CustomerDocument` | `id`, `customerId` (FK), `docType` (enum), `filePath`, `fileSize`, `mimeType`, `uploadedById` (FK) |
+| `Transaction` | `customerPhone String?`, `customerId String?` (FK → Customer) |
+
+Document types: `PASSPORT`, `PASSPORT_CARD`, `NATIONAL_ID`, `DRIVING_LICENSE`.
+
+### Smart Phone Lookup (Transaction Forms)
+All three transaction forms (Buy/Sell/Cross-Currency) include:
+- **Phone field** — required, defaults to `+44`, validated against E.164 regex
+- **Lookup badge** — on field blur, calls `GET /customers/lookup?phone=…`
+  - New phone: shows `New Customer` badge
+  - Known phone: shows `X previous transactions · TYPE(S)` badge (e.g. `3 previous transactions · BUY, SELL`)
+- **Proof of Identity** — optional document upload (JPEG/PNG/WebP/PDF, max 10 MB) with document-type selector
+
+### Customer Inventory Page (`/customers`)
+Accessible to staff with the `customers` permission. Features:
+- Summary stats: total customers, transactions, documents stored
+- Search by name, phone, or email
+- Expandable customer rows showing all uploaded identity documents
+- Per-document: download button (auth-aware fetch → file blob); delete button (admin only)
+- Upload new document without re-doing a transaction
+
+### Customer Inventory API
+| Endpoint | Description |
+|---|---|
+| `GET /customers/lookup?phone=` | Smart lookup — returns badge data |
+| `GET /customers?limit=N` | List all customers with transaction + document counts |
+| `GET /customers/:id` | Single customer with full documents list |
+| `POST /customers/:id/documents` | Upload identity document (multipart/form-data) |
+| `GET /customers/:id/documents` | List documents |
+| `GET /customers/:id/documents/:docId/download` | Stream download |
+| `DELETE /customers/:id/documents/:docId` | Delete (admin only) |
+
+Document files are stored at `/app/customer-docs/` inside the API container (Docker volume `customer_docs_data`). The directory is configurable via the `customer_docs_directory` AppSetting.
+
+### Forgot Password Flow
+End-to-end password reset:
+1. Login page has "Forgot password?" link → `/forgot-password`
+2. User enters email → `POST /auth/forgot-password` (always returns 200; never reveals whether email exists)
+3. If email matches active user, a reset link is emailed: `FRONTEND_URL/reset-password?token=<uuid>` (1-hour TTL)
+4. Reset page reads `?token` from URL → validates → `POST /auth/reset-password` → password updated
+5. User redirected to login after 3 seconds
+
+> SMTP must be configured in **Settings → Email** for reset emails to send.
+
+---
+
+## Database Sizing & Scalability
+
+### Storage Breakdown (at ~200 transactions/day)
+
+| Data type | Annual growth | Notes |
+|---|---|---|
+| PostgreSQL rows (transactions, etc.) | ~50–100 MB/year | Pure relational data; no blobs in DB |
+| PDF receipts (`/app/pdf-receipts/`) | ~3–4 GB/year | ~50 KB avg per transaction receipt |
+| Customer identity documents (`/app/customer-docs/`) | ~1–2 GB/year | ~500 KB avg per document, ~1–2 docs/customer |
+| JSON backups (`/app/backups/`) | ~50–200 MB/year | Compressed JSON exports |
+| **Total** | **~5–7 GB/year** | |
+
+A **50 GB** server comfortably handles **7–10 years** of operation. A **100 GB** server is effectively unlimited for this scale.
+
+### PostgreSQL Scalability
+PostgreSQL handles tables with hundreds of millions of rows without issue. The current schema (indexed `customerId`, `sessionDate`, `type`, `isVoided`) is well-suited for the query patterns used. No sharding or partitioning is needed at this scale.
+
+### Recommendations
+- Set a **backup retention policy** (e.g., keep 90 days of JSON backups)
+- Add **disk monitoring** on `/app/customer-docs/` and `/app/pdf-receipts/` (alert at 80% capacity)
+- Consider **S3/blob storage** only if volume grows to >100 customers/day
+- The `FRONTEND_URL` env var must be set to the server's public URL for password reset emails to contain correct links

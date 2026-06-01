@@ -24,6 +24,13 @@ enum TransactionType {
   CROSS // Non-GBP to non-GBP exchange via GBP bridge
 }
 
+enum DocumentType {
+  PASSPORT
+  PASSPORT_CARD
+  NATIONAL_ID
+  DRIVING_LICENSE
+}
+
 // ─────────────────────────────────────────────
 // USERS
 // ─────────────────────────────────────────────
@@ -50,8 +57,53 @@ model User {
   openingBals    OpeningBalance[]
   exchangeRates  ExchangeRate[]
   auditLogs      AuditLog[]
+  uploadedDocs   CustomerDocument[]
 
   @@map("users")
+}
+
+// ─────────────────────────────────────────────
+// CUSTOMERS
+// Phone number (with country code) is the unique identifier.
+// Created automatically on first transaction; linked on every subsequent one.
+// ─────────────────────────────────────────────
+
+model Customer {
+  id        String   @id @default(uuid())
+  phone     String   @unique @db.VarChar(20)  // E.164 format e.g. "+447700900000"
+  name      String   @db.VarChar(200)
+  email     String?  @db.VarChar(255)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions Transaction[]
+  documents    CustomerDocument[]
+
+  @@index([phone])
+  @@map("customers")
+}
+
+// ─────────────────────────────────────────────
+// CUSTOMER DOCUMENTS (Proof of Identity)
+// Files are stored on disk; this table holds metadata.
+// ─────────────────────────────────────────────
+
+model CustomerDocument {
+  id           String       @id @default(uuid())
+  customer     Customer     @relation(fields: [customerId], references: [id])
+  customerId   String
+  docType      DocumentType
+  originalName String       @db.VarChar(255)   // Original filename from upload
+  storedName   String       @unique @db.VarChar(255)  // UUID-based filename on disk
+  filePath     String       @db.VarChar(500)   // Absolute path on server
+  fileSize     Int                              // Bytes
+  mimeType     String       @db.VarChar(100)
+  uploadedBy   User         @relation(fields: [uploadedById], references: [id])
+  uploadedById String
+  uploadedAt   DateTime     @default(now())
+
+  @@index([customerId])
+  @@map("customer_documents")
 }
 
 // ─────────────────────────────────────────────
@@ -133,6 +185,9 @@ model Transaction {
   type            TransactionType
   customerName    String
   customerEmail   String?         @db.VarChar(255)
+  customerPhone   String?         @db.VarChar(20)    // E.164 format; nullable for legacy rows
+  customer        Customer?       @relation(fields: [customerId], references: [id])
+  customerId      String?                             // FK to Customer; nullable for legacy rows
   currencyIn      Currency        @relation("CurrencyIn",  fields: [currencyInId],  references: [id])
   currencyInId    String
   amountIn        Decimal         @db.Decimal(18, 2)
@@ -159,6 +214,7 @@ model Transaction {
   @@index([sessionDate])
   @@index([tellerId])
   @@index([type])
+  @@index([customerId])
   @@map("transactions")
 }
 

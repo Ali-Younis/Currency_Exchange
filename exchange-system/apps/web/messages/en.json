@@ -16,6 +16,7 @@
     "rates": "Exchange Rates",
     "balances": "Initial Balances",
     "currentBalances": "Current Balances",
+    "customers": "Customer Inventory",
     "logout": "Logout",
     "about": "About"
   },
@@ -148,6 +149,7 @@
     "countryCode": "Country Code",
     "countryCodeHint": "2-letter ISO 3166-1 alpha-2 code (e.g. US, GB, AE)"
   },
+  "common": {
     "save": "Save",
     "cancel": "Cancel",
     "delete": "Delete",

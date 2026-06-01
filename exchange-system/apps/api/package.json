@@ -48,6 +48,7 @@
     "passport-jwt": "^4.0.1",
     "pg": "^8.20.0",
     "prisma": "^7.8.0",
+    "libphonenumber-js": "^1.11.4",
     "qrcode": "^1.5.4",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
@@ -60,6 +61,7 @@
     "@nestjs/testing": "^11.0.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/express": "^5.0.0",
+    "@types/multer": "^1.4.12",
     "@types/helmet": "*",
     "@types/swagger-ui-express": "^4.1.7",
     "@types/jest": "^30.0.0",

@@ -68,6 +68,7 @@ export default function LedgerPage() {
       Receipt: tx.receiptNumber,
       Type: tx.type,
       Customer: tx.customerName,
+      Phone: tx.customerPhone ?? '—',
       In: `${tx.amountIn} ${tx.currencyInCode}`,
       Out: `${tx.amountOut} ${tx.currencyOutCode}`,
       Rate: tx.rateApplied,
@@ -196,6 +197,7 @@ function LedgerTable({
             <tr className="bg-gray-50 text-gray-500 text-xs uppercase">
               <th className="text-left px-4 py-3">Receipt</th>
               <th className="text-left px-4 py-3">Customer</th>
+              <th className="text-left px-4 py-3">Phone</th>
               <th className="text-right px-4 py-3">In</th>
               <th className="text-right px-4 py-3">Out</th>
               <th className="text-right px-4 py-3">Rate</th>
@@ -209,6 +211,7 @@ function LedgerTable({
               <tr key={tx.id} className={`border-t border-gray-100 hover:bg-gray-50 ${tx.isVoided ? 'opacity-40 line-through' : ''}`}>
                 <td className="px-4 py-3 font-mono text-xs text-gray-600">{tx.receiptNumber}</td>
                 <td className="px-4 py-3 text-gray-900">{tx.customerName}</td>
+                <td className="px-4 py-3 font-mono text-xs text-gray-500">{tx.customerPhone ?? '—'}</td>
                 <td className="px-4 py-3 text-right font-medium">
                   {fmtAmount(tx.amountIn, tx.currencyInCode)}
                 </td>

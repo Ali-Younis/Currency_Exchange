@@ -49,6 +49,7 @@ export class UsersService {
         email: dto.email,
         role: dto.role,
         forcePasswordChange: true,  // new users must change password on first login
+        ...(dto.role !== 'ADMIN' ? { permissions: ['customers'] } : {}),
       },
       select: {
         id: true, username: true, fullName: true, receiptAlias: true, email: true, role: true, isActive: true,

@@ -174,3 +174,75 @@ Tellers without a specific permission will not see that page in the sidebar.
 - If you lose access to your authenticator app, contact your administrator to reset your TOTP.
 - Each session is protected by a signed JWT token that expires after 8 hours.
 - Logging out immediately invalidates your session token.
+
+---
+
+## Recording Customer Details
+
+Every Buy, Sell, and Cross-Currency transaction requires a **customer phone number**.
+
+### Phone Field
+- Enter the customer's phone in international format (e.g. `+447700900000`)
+- The field defaults to `+44` (UK) — overwrite with the full number
+- After entering the number and tabbing away, the form checks if the customer is known:
+  - **New Customer** — first time this phone number has been seen
+  - **3 previous transactions · BUY, SELL** — returning customer badge showing count and transaction types
+
+### Uploading Proof of Identity
+Below the phone field there is an optional **Proof of Identity** section:
+1. Select document type: **Passport**, **Passport Card**, **National ID**, or **Driving License**
+2. Click **Choose File** and pick a JPEG, PNG, WebP, or PDF (max 10 MB)
+3. The document is uploaded automatically after the transaction completes
+
+> Documents are stored on the server and can be viewed from the **Customer Inventory** page.
+
+---
+
+## Customer Inventory
+
+The **Customer Inventory** page (`/customers`) shows all registered customers and their stored documents.
+
+> Access requires the `customers` permission — ask your administrator to grant it if needed.
+
+### What you can do:
+- Search customers by name, phone number, or email
+- Click a customer row to expand it and see their identity documents
+- **Download** any stored document to your computer
+- **Upload** a new document for an existing customer (without re-doing a transaction)
+- Admins can **delete** documents
+
+### Summary Statistics
+At the top of the page you'll see:
+- **Total Customers** registered in the system
+- **Total Transactions** across all customers
+- **Documents Stored** on the server
+
+---
+
+## Forgot Password
+
+If you've forgotten your password:
+1. Click **Forgot password?** on the login page
+2. Enter the email address associated with your account
+3. If the email matches an account, you'll receive a reset link (valid for 1 hour)
+4. Click the link in the email to open the reset page
+5. Enter and confirm your new password (must meet the complexity rules)
+6. You'll be redirected to login once the password is updated
+
+> **Note**: SMTP must be configured in Settings for password reset emails to be sent. Contact your administrator if you don't receive the email.
+
+---
+
+## Teller Permissions (updated)
+
+Admins control which sections each teller can access:
+
+| Permission | Unlocks |
+|---|---|
+| `buy` | Buy transaction page |
+| `sell` | Sell transaction page |
+| `cross` | Cross-Currency transaction page |
+| `ledger` | Transaction ledger page |
+| `reports` | Reports page |
+| `customers` | Customer Inventory page |
+

@@ -385,14 +385,12 @@ function VolumeTab() {
 
 function CustomersTab() {
   const t = useTranslations('report');
-  const [startDate, setStartDate] = useState(thirtyDaysAgo());
-  const [endDate, setEndDate] = useState(today());
 
   const { data, isLoading } = useQuery<TopCustomersReport>({
-    queryKey: ['customers-report', startDate, endDate],
+    queryKey: ['customers-report'],
     queryFn: () =>
       api
-        .get(`/reports/customers?startDate=${startDate}&endDate=${endDate}&limit=25`)
+        .get(`/reports/customers?limit=50`)
         .then((r) => r.data),
   });
 
@@ -402,23 +400,19 @@ function CustomersTab() {
       data?.customers.map((c) => ({
         Rank: c.rank,
         Customer: c.customerName,
+        Phone: c.customerPhone,
+        Email: c.customerEmail ?? '',
         Transactions: c.totalTransactions,
+        'Customer Since': c.createdAt ? new Date(c.createdAt).toLocaleDateString() : '',
       })) ?? [],
     );
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Top Customers');
-    XLSX.writeFile(wb, `top-customers-${startDate}-to-${endDate}.xlsx`);
+    XLSX.writeFile(wb, `top-customers-all-time.xlsx`);
   }
 
   return (
     <div>
-      <DateRangeBar
-        startDate={startDate}
-        endDate={endDate}
-        onStart={setStartDate}
-        onEnd={setEndDate}
-      />
-
       {isLoading ? (
         <Spinner />
       ) : (
@@ -438,6 +432,8 @@ function CustomersTab() {
                 <tr className="bg-[#0a146e] text-white text-xs uppercase">
                   <th className="text-center px-4 py-4 w-12">{t('rank')}</th>
                   <th className="text-left px-5 py-4">{t('customer')}</th>
+                  <th className="text-left px-5 py-4">Phone</th>
+                  <th className="text-left px-5 py-4">Email</th>
                   <th className="text-right px-5 py-4">{t('transactions')}</th>
                 </tr>
               </thead>
@@ -460,13 +456,15 @@ function CustomersTab() {
                       </span>
                     </td>
                     <td className="px-5 py-3 font-medium text-gray-900">{c.customerName}</td>
+                    <td className="px-5 py-3 text-gray-600 font-mono text-xs">{c.customerPhone}</td>
+                    <td className="px-5 py-3 text-gray-500 text-xs">{c.customerEmail ?? '—'}</td>
                     <td className="px-5 py-3 text-right">{c.totalTransactions}</td>
                   </tr>
                 ))}
                 {!data?.customers.length && (
                   <tr>
-                    <td colSpan={3} className="text-center text-gray-400 py-12">
-                      No data for selected range
+                    <td colSpan={5} className="text-center text-gray-400 py-12">
+                      No customers yet
                     </td>
                   </tr>
                 )}

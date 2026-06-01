@@ -16,6 +16,7 @@
     "rates": "أسعار الصرف",
     "balances": "الأرصدة المبدئية",
     "currentBalances": "الأرصدة الحالية",
+    "customers": "سجل العملاء",
     "logout": "تسجيل الخروج",
     "about": "حول النظام"
   },
@@ -148,6 +149,7 @@
     "countryCode": "رمز الدولة",
     "countryCodeHint": "رمز مكون من حرفين ISO 3166-1 alpha-2 (مثل US، GB، AE)"
   },
+  "common": {
     "save": "حفظ",
     "cancel": "إلغاء",
     "delete": "حذف",
@@ -161,7 +163,8 @@
     "date": "التاريخ",
     "status": "الحالة",
     "active": "نشط",
-    "inactive": "غير نشط"  },
+    "inactive": "غير نشط"
+  },
   "dashboard": {
     "todayBuys": "شراء اليوم",
     "todaySells": "بيع اليوم",

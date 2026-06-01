@@ -14,6 +14,7 @@ import { TransactionsModule } from './transactions/transactions.module';
 import { ReportsModule } from './reports/reports.module';
 import { AppSettingsModule } from './app-settings/app-settings.module';
 import { BackupModule } from './backup/backup.module';
+import { CustomersModule } from './customers/customers.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -34,6 +35,7 @@ import { AppService } from './app.service';
     ReportsModule,
     AppSettingsModule,
     BackupModule,
+    CustomersModule,
   ],
   controllers: [AppController],
   providers: [

@@ -1,6 +1,7 @@
 'use client';
 
 import { AppShell } from '@/components/AppShell';
+import { CurrencyLabel } from '@/components/CurrencyLabel';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
@@ -84,7 +85,9 @@ export default function DashboardPage() {
                   const currentBal = currentBalanceMap.get(row.currencyId) ?? '0.00';
                   return (
                   <tr key={row.currencyId} className="border-t border-gray-100 hover:bg-gray-50">
-                    <td className="px-5 py-3 font-medium text-gray-900">{row.currencyCode}</td>
+                    <td className="px-5 py-3 font-medium text-gray-900">
+                      <CurrencyLabel code={row.currencyCode} nameEn={row.currencyNameEn} countryCode={row.countryCode} />
+                    </td>
                     <td className="px-5 py-3 text-right text-green-600">{row.totalBuys}</td>
                     <td className="px-5 py-3 text-right text-red-600">{row.totalSells}</td>
                     <td
