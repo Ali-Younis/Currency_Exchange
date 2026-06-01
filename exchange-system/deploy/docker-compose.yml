@@ -62,9 +62,11 @@ services:
       JWT_SECRET:    ${JWT_SECRET:?JWT_SECRET is required — see .env}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
       CORS_ORIGIN:   ${CORS_ORIGIN:-http://localhost}
+      FRONTEND_URL:  ${CORS_ORIGIN:-http://localhost}
     volumes:
       - backups_data:/app/backups
       - pdf_receipts_data:/app/pdf-receipts
+      - customer_docs_data:/app/customer-docs
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3001/api/v1/health || exit 1"]
       interval: 30s
@@ -102,3 +104,4 @@ volumes:
   redis_data:
   backups_data:
   pdf_receipts_data:
+  customer_docs_data:
