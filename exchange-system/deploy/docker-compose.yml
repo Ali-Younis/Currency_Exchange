@@ -46,6 +46,7 @@ services:
   # ── NestJS API ─────────────────────────────────────────────────────────────
   api:
     image: ghcr.io/${GITHUB_OWNER}/exchange-api:${IMAGE_TAG:-latest}
+    pull_policy: always
     container_name: exchange_api
     restart: unless-stopped
     depends_on:
@@ -77,6 +78,7 @@ services:
   # ── Next.js Web UI ─────────────────────────────────────────────────────────
   web:
     image: ghcr.io/${GITHUB_OWNER}/exchange-web:${IMAGE_TAG:-latest}
+    pull_policy: always
     container_name: exchange_web
     restart: unless-stopped
     depends_on:
